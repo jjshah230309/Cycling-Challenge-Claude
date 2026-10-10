@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+.DS_Store
+tools/routegen/.cache/
+__pycache__/

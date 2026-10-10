@@ -1,0 +1,662 @@
+{
+  "routes": [
+    {
+      "id": "alpe-dhuez",
+      "name": "Alpe d'Huez",
+      "event": "Tour de France",
+      "location": "Isère, French Alps",
+      "country": "FR",
+      "biome": "alpine",
+      "summary": "The 21 numbered hairpins from Le Bourg-d'Oisans to the ski station — the most famous climb in cycling.",
+      "waypoints": [
+        [
+          45.0554,
+          6.0328
+        ],
+        [
+          45.0919,
+          6.0647
+        ]
+      ],
+      "official": {
+        "distance_km": 13.8,
+        "elevation_m": 1071,
+        "avg_grade": 8.1
+      },
+      "climb_names": [
+        "Alpe d'Huez"
+      ],
+      "category": "grandTourClimb",
+      "loop": false,
+      "laps": 1,
+      "router": "car",
+      "max_grade": 12,
+      "terrain_grid": 56
+    },
+    {
+      "id": "mont-ventoux",
+      "name": "Mont Ventoux (Bédoin)",
+      "event": "Tour de France",
+      "location": "Vaucluse, Provence",
+      "country": "FR",
+      "biome": "alpine",
+      "summary": "The Giant of Provence from Bédoin: vineyards, a relentless forest section to Chalet Reynard, then the bare white moonscape to the observatory.",
+      "waypoints": [
+        [
+          44.1243,
+          5.1797
+        ],
+        [
+          44.1523,
+          5.319
+        ],
+        [
+          44.174,
+          5.2784
+        ]
+      ],
+      "official": {
+        "distance_km": 21.8,
+        "elevation_m": 1617,
+        "avg_grade": 7.4
+      },
+      "climb_names": [
+        "Mont Ventoux"
+      ],
+      "category": "grandTourClimb",
+      "loop": false,
+      "laps": 1,
+      "router": "car",
+      "max_grade": 12,
+      "terrain_grid": 56
+    },
+    {
+      "id": "tourmalet",
+      "name": "Col du Tourmalet (Luz)",
+      "event": "Tour de France",
+      "location": "Hautes-Pyrénées",
+      "country": "FR",
+      "biome": "alpine",
+      "summary": "The most-visited climb in Tour history, from Luz-Saint-Sauveur through Barèges to the 2,115 m col.",
+      "waypoints": [
+        [
+          42.8721,
+          -0.0043
+        ],
+        [
+          42.8959,
+          0.0622
+        ],
+        [
+          42.9084,
+          0.1453
+        ]
+      ],
+      "official": {
+        "distance_km": 19.0,
+        "elevation_m": 1404,
+        "avg_grade": 7.4
+      },
+      "climb_names": [
+        "Col du Tourmalet"
+      ],
+      "category": "grandTourClimb",
+      "loop": false,
+      "laps": 1,
+      "router": "car",
+      "max_grade": 11,
+      "terrain_grid": 56
+    },
+    {
+      "id": "galibier",
+      "name": "Col du Galibier (Valloire)",
+      "event": "Tour de France",
+      "location": "Savoie, French Alps",
+      "country": "FR",
+      "biome": "alpine",
+      "summary": "From Valloire past Plan Lachat to the 2,642 m summit — the high point of countless Tours.",
+      "waypoints": [
+        [
+          45.165,
+          6.4296
+        ],
+        [
+          45.0888,
+          6.4361
+        ],
+        [
+          45.0641,
+          6.4079
+        ]
+      ],
+      "official": {
+        "distance_km": 18.1,
+        "elevation_m": 1245,
+        "avg_grade": 6.9
+      },
+      "climb_names": [
+        "Col du Galibier"
+      ],
+      "category": "grandTourClimb",
+      "loop": false,
+      "laps": 1,
+      "router": "car",
+      "max_grade": 12,
+      "terrain_grid": 56
+    },
+    {
+      "id": "stelvio",
+      "name": "Passo dello Stelvio (Prato)",
+      "event": "Giro d'Italia",
+      "location": "South Tyrol",
+      "country": "IT",
+      "biome": "alpine",
+      "summary": "48 hairpins from Prato allo Stelvio via Trafoi to 2,758 m, the Cima Coppi of the Giro.",
+      "waypoints": [
+        [
+          46.6195,
+          10.5905
+        ],
+        [
+          46.5522,
+          10.5103
+        ],
+        [
+          46.5286,
+          10.4532
+        ]
+      ],
+      "official": {
+        "distance_km": 24.3,
+        "elevation_m": 1808,
+        "avg_grade": 7.4
+      },
+      "climb_names": [
+        "Passo dello Stelvio"
+      ],
+      "category": "grandTourClimb",
+      "loop": false,
+      "laps": 1,
+      "router": "car",
+      "max_grade": 12,
+      "terrain_grid": 56
+    },
+    {
+      "id": "zoncolan",
+      "name": "Monte Zoncolan (Ovaro)",
+      "event": "Giro d'Italia",
+      "location": "Friuli",
+      "country": "IT",
+      "biome": "alpine",
+      "summary": "The brutal Ovaro side of the Zoncolan: ten kilometres at almost 12%, with ramps above 20% through narrow tunnels near the top.",
+      "waypoints": [
+        [
+          46.4829,
+          12.8654
+        ],
+        [
+          46.5025,
+          12.9263
+        ]
+      ],
+      "official": {
+        "distance_km": 10.1,
+        "elevation_m": 1210,
+        "avg_grade": 11.9
+      },
+      "climb_names": [
+        "Monte Zoncolan"
+      ],
+      "category": "grandTourClimb",
+      "loop": false,
+      "laps": 1,
+      "router": "car",
+      "max_grade": 22,
+      "terrain_grid": 56
+    },
+    {
+      "id": "angliru",
+      "name": "Alto de l'Angliru",
+      "event": "Vuelta a España",
+      "location": "Asturias",
+      "country": "ES",
+      "biome": "alpine",
+      "summary": "La Vuelta's monster: the Cueña les Cabres section near the top touches 23.5%.",
+      "waypoints": [
+        [
+          43.2307,
+          -5.882
+        ],
+        [
+          43.2257,
+          -5.938
+        ]
+      ],
+      "official": {
+        "distance_km": 12.5,
+        "elevation_m": 1266,
+        "avg_grade": 10.1
+      },
+      "climb_names": [
+        "Alto de l'Angliru"
+      ],
+      "category": "grandTourClimb",
+      "loop": false,
+      "laps": 1,
+      "router": "car",
+      "max_grade": 23.5,
+      "terrain_grid": 56
+    },
+    {
+      "id": "mortirolo",
+      "name": "Passo del Mortirolo (Mazzo)",
+      "event": "Giro d'Italia",
+      "location": "Lombardy",
+      "country": "IT",
+      "biome": "alpine",
+      "summary": "Pantani's mountain: the steep, wooded Mazzo di Valtellina side with no let-up.",
+      "waypoints": [
+        [
+          46.2585,
+          10.2552
+        ],
+        [
+          46.2479,
+          10.2983
+        ]
+      ],
+      "official": {
+        "distance_km": 12.4,
+        "elevation_m": 1300,
+        "avg_grade": 10.5
+      },
+      "climb_names": [
+        "Passo del Mortirolo"
+      ],
+      "category": "grandTourClimb",
+      "loop": false,
+      "laps": 1,
+      "router": "car",
+      "max_grade": 18,
+      "terrain_grid": 56
+    },
+    {
+      "id": "ghisallo",
+      "name": "Madonna del Ghisallo",
+      "event": "Il Lombardia",
+      "location": "Lake Como",
+      "country": "IT",
+      "biome": "lakes",
+      "summary": "From the lakeshore at Bellagio up to the cyclists' chapel of the Madonna del Ghisallo — the signature climb of the Race of the Falling Leaves.",
+      "waypoints": [
+        [
+          45.9873,
+          9.2613
+        ],
+        [
+          45.9242,
+          9.2678
+        ]
+      ],
+      "official": {
+        "distance_km": 10.6
+      },
+      "climb_names": [
+        "Madonna del Ghisallo"
+      ],
+      "router": "car",
+      "category": "classic",
+      "loop": false,
+      "laps": 1,
+      "max_grade": 14
+    },
+    {
+      "id": "sanremo-finale",
+      "name": "Milano–Sanremo Finale",
+      "event": "Milano–Sanremo",
+      "location": "Riviera dei Fiori, Liguria",
+      "country": "IT",
+      "biome": "coastal",
+      "summary": "The decisive finale of La Primavera: the Cipressa from San Lorenzo al Mare, the Aurelia coast road, the Poggio and the sprint on Via Roma.",
+      "waypoints": [
+        [
+          43.8547,
+          7.9637
+        ],
+        [
+          43.8554,
+          7.9387
+        ],
+        [
+          43.851,
+          7.931
+        ],
+        [
+          43.8449,
+          7.9189
+        ],
+        [
+          43.845,
+          7.8998
+        ],
+        [
+          43.831,
+          7.8491
+        ],
+        [
+          43.831,
+          7.8139
+        ],
+        [
+          43.815,
+          7.7743
+        ]
+      ],
+      "climb_names": [
+        "Cipressa",
+        "Poggio"
+      ],
+      "router": "car",
+      "category": "classic",
+      "loop": false,
+      "laps": 1,
+      "max_grade": 9,
+      "smooth_sigma": 60
+    },
+    {
+      "id": "roubaix-finale",
+      "name": "Paris–Roubaix Finale",
+      "event": "Paris–Roubaix",
+      "location": "Nord, France",
+      "country": "FR",
+      "biome": "countryside",
+      "summary": "The five-star Carrefour de l'Arbre, Gruson and Hem sectors and the lap of honour on the Roubaix velodrome.",
+      "waypoints": [
+        [
+          50.5949,
+          3.2584
+        ],
+        [
+          50.5949,
+          3.243
+        ],
+        [
+          50.5956,
+          3.2054
+        ],
+        [
+          50.6541,
+          3.1839
+        ],
+        [
+          50.6781,
+          3.2055
+        ]
+      ],
+      "router": "bike",
+      "category": "classic",
+      "loop": false,
+      "laps": 1,
+      "max_grade": 6,
+      "smooth_sigma": 60,
+      "street_surfaces": [
+        {
+          "street": "Chemin de Grusin à Camphin-en-Pévèle",
+          "surface": "cobbles",
+          "name": "Camphin-en-Pévèle ★★★★"
+        },
+        {
+          "street": "Pavé de Luchin",
+          "surface": "cobbles",
+          "name": "Carrefour de l'Arbre ★★★★★"
+        },
+        {
+          "street": "Chemin de Bourghelles",
+          "surface": "cobbles",
+          "name": "Carrefour de l'Arbre ★★★★★"
+        },
+        {
+          "street": "Pavé de l'Arbre",
+          "surface": "cobbles",
+          "name": "Carrefour de l'Arbre ★★★★★"
+        },
+        {
+          "street": "Chemin des Vachers",
+          "surface": "cobbles",
+          "name": "Gruson ★★"
+        }
+      ]
+    },
+    {
+      "id": "arenberg",
+      "name": "Trouée d'Arenberg",
+      "event": "Paris–Roubaix",
+      "location": "Wallers, Nord",
+      "country": "FR",
+      "biome": "forest",
+      "summary": "2.3 km of brutal cobbles dead straight through the Arenberg forest, entered beneath the old mine railway bridge.",
+      "waypoints": [
+        [
+          50.378,
+          3.43
+        ],
+        [
+          50.4003,
+          3.4116
+        ],
+        [
+          50.418,
+          3.397
+        ]
+      ],
+      "router": "bike",
+      "street_surfaces": [
+        {
+          "street": "Drève des Boules d'Hérin",
+          "surface": "cobbles",
+          "name": "Trouée d'Arenberg ★★★★★"
+        }
+      ],
+      "category": "classic",
+      "loop": false,
+      "laps": 1,
+      "max_grade": 4,
+      "smooth_sigma": 60
+    },
+    {
+      "id": "mur-de-huy",
+      "name": "Mur de Huy",
+      "event": "La Flèche Wallonne",
+      "location": "Huy, Wallonia",
+      "country": "BE",
+      "biome": "countryside",
+      "summary": "The Chemin des Chapelles: 1.3 km past the chapels with a 26% hairpin — the decisive finale of La Flèche Wallonne.",
+      "waypoints": [
+        [
+          50.5188,
+          5.2383
+        ],
+        [
+          50.5162,
+          5.2461
+        ],
+        [
+          50.5115,
+          5.2445
+        ]
+      ],
+      "climb_names": [
+        "Mur de Huy"
+      ],
+      "router": "bike",
+      "category": "classic",
+      "loop": false,
+      "laps": 1,
+      "max_grade": 26,
+      "smooth_sigma": 35
+    },
+    {
+      "id": "la-redoute",
+      "name": "Côte de La Redoute",
+      "event": "Liège–Bastogne–Liège",
+      "location": "Aywaille, Wallonia",
+      "country": "BE",
+      "biome": "forest",
+      "summary": "La Doyenne's most famous climb, above the motorway at Remouchamps, its tarmac painted with the names of Belgian heroes.",
+      "waypoints": [
+        [
+          50.4795,
+          5.7126
+        ],
+        [
+          50.4899,
+          5.7068
+        ],
+        [
+          50.495,
+          5.701
+        ]
+      ],
+      "climb_names": [
+        "La Redoute"
+      ],
+      "router": "bike",
+      "category": "classic",
+      "loop": false,
+      "laps": 1,
+      "max_grade": 20,
+      "smooth_sigma": 45
+    },
+    {
+      "id": "montreal-2026",
+      "name": "Montréal 2026 — Mont-Royal Circuit",
+      "category": "worldChampionship",
+      "event": "UCI Road World Championships 2026",
+      "location": "Montréal, Québec",
+      "country": "CA",
+      "biome": "urban",
+      "summary": "The Mount Royal circuit of the Grand Prix Cycliste de Montréal and the 2026 Worlds: up Voie Camillien-Houde over the mountain, through the Université de Montréal campus, Avenue Pagnuelo and back to Avenue du Parc.",
+      "loop": true,
+      "laps": 1,
+      "router": "bike",
+      "official": {
+        "distance_km": 12.3,
+        "elevation_m": 269
+      },
+      "waypoints": [
+        [
+          45.5193,
+          -73.595,
+          150
+        ],
+        [
+          45.5092,
+          -73.5911
+        ],
+        [
+          45.5014,
+          -73.5982,
+          250,
+          60
+        ],
+        [
+          45.4975,
+          -73.617
+        ],
+        [
+          45.503,
+          -73.619,
+          60,
+          60
+        ],
+        [
+          45.504,
+          -73.612
+        ],
+        [
+          45.511,
+          -73.614,
+          0,
+          70
+        ],
+        [
+          45.5131,
+          -73.6065,
+          160,
+          60
+        ],
+        [
+          45.516,
+          -73.5995,
+          60,
+          60
+        ]
+      ],
+      "segments": [],
+      "climb_names": [
+        "Voie Camillien-Houde"
+      ],
+      "max_grade": 14,
+      "smooth_sigma": 50
+    },
+    {
+      "id": "zurich-2024",
+      "name": "Zürich 2024 — City Circuit",
+      "category": "worldChampionship",
+      "event": "UCI Road World Championships 2024",
+      "location": "Zürich",
+      "country": "CH",
+      "biome": "urban",
+      "summary": "Reconstruction of the 27 km Worlds circuit: up Zürichbergstrasse to the Zoo, down to Klusplatz, the Witikon climb, over the Forch and back along Lake Zürich to Sechseläutenplatz.",
+      "loop": true,
+      "laps": 1,
+      "router": "bike",
+      "official": {
+        "distance_km": 26.9
+      },
+      "waypoints": [
+        [
+          47.3657,
+          8.5463
+        ],
+        [
+          47.3764,
+          8.5594
+        ],
+        [
+          47.3869,
+          8.5776
+        ],
+        [
+          47.3645,
+          8.5665,
+          90,
+          90
+        ],
+        [
+          47.3583,
+          8.5906
+        ],
+        [
+          47.3256,
+          8.6468
+        ],
+        [
+          47.3176,
+          8.5831
+        ],
+        [
+          47.34,
+          8.573
+        ]
+      ],
+      "segments": [],
+      "climb_names": [
+        "Zürichbergstrasse",
+        "Witikon"
+      ],
+      "max_grade": 15,
+      "smooth_sigma": 60
+    }
+  ]
+}
