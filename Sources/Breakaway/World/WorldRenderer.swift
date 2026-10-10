@@ -44,8 +44,7 @@ final class WorldRenderer {
         camera.bloomThreshold = 0.9
         camera.vignettingIntensity = 0.35
         camera.vignettingPower = 0.6
-        camera.motionBlurIntensity = 0.12
-        camera.screenSpaceAmbientOcclusionIntensity = 0.5
+        // No SSAO / motion blur: both dither visibly on large terrain and cost frame time.
         cameraNode.camera = camera
         cameraNode.name = "camera"
         world.scene.rootNode.addChildNode(cameraNode)
@@ -80,7 +79,7 @@ final class WorldRenderer {
             node.isHidden = !visible
             guard visible else { continue }
             node.update(state: state, route: route, frame: frame, dt: fdt, detailed: dist < 90)
-            node.setTagVisible(dist < 55)
+            node.setTagVisible(dist > 9 && dist < 55)
         }
 
         // Camera.
@@ -114,8 +113,9 @@ final class WorldRenderer {
             lookAt = riderPos + up * 1.05
             stiffness = 7
         case .helicopter:
-            targetPos = scenePoint(route, d - 32, lift: 24) + right * 10
-            lookAt = scenePoint(route, d + 12, lift: 0)
+            // Behind along the heading (not the road) and high enough to clear switchbacks.
+            targetPos = riderPos - fwd * 26 + up * 34 + right * 8
+            lookAt = riderPos + fwd * 14
             stiffness = 2
         case .cinematic:
             let a = clock * 0.18

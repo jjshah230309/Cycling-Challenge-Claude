@@ -117,12 +117,15 @@ enum WorldBuilder {
         var c: SIMD4<Float>
         switch biome {
         case .alpine:
-            let meadow = SceneMath.mix(SceneMath.rgba(0x5D7F37), SceneMath.rgba(0x3F6128), 0.5 + 0.5 * patch)
-            let alpineGrass = SceneMath.rgba(0x8C8D63)
-            let rock = SceneMath.mix(SceneMath.rgba(0x7E7A72), SceneMath.rgba(0x9A958B), 0.5 + 0.5 * n)
+            let meadow = SceneMath.mix(SceneMath.rgba(0x5F8A3A), SceneMath.rgba(0x46702C), 0.5 + 0.5 * patch)
+            let forest = SceneMath.rgba(0x2E4A26)
+            let alpineGrass = SceneMath.mix(SceneMath.rgba(0x6F8A47), SceneMath.rgba(0x7D8B55), 0.5 + 0.5 * n)
+            let rock = SceneMath.mix(SceneMath.rgba(0x7C7B78), SceneMath.rgba(0x99978F), 0.5 + 0.5 * n)
             let snow = SceneMath.rgba(0xF3F6FA)
             let e = Float(elevation)
-            c = SceneMath.mix(meadow, alpineGrass, (e - 1800 - 150 * n) / 450)
+            // Dark conifer forest patches on the lower slopes.
+            c = SceneMath.mix(meadow, forest, (patch - 0.05) * 3 * (e < 1950 ? 1 : 0))
+            c = SceneMath.mix(c, alpineGrass, (e - 2000 - 150 * n) / 400)
             c = SceneMath.mix(c, rock, (slope - 0.55) / 0.2)
             c = SceneMath.mix(c, rock, (e - 2500 - 120 * n) / 300 * 0.7)
             c = SceneMath.mix(c, snow, (e - 2850 - 150 * patch) / 250 * (slope < 0.75 ? 1 : 0.3))
@@ -130,8 +133,8 @@ enum WorldBuilder {
             let scrub = SceneMath.mix(SceneMath.rgba(0x7A8A48), SceneMath.rgba(0x5E7038), 0.5 + 0.5 * patch)
             c = SceneMath.mix(scrub, SceneMath.rgba(0xA89C82), (slope - 0.5) / 0.25)
         case .urban:
-            let park = SceneMath.mix(SceneMath.rgba(0x6A8448), SceneMath.rgba(0x55703A), 0.5 + 0.5 * n)
-            c = SceneMath.mix(park, SceneMath.rgba(0x8E8D88), 0.5 + patch * 0.9)
+            let park = SceneMath.mix(SceneMath.rgba(0x5F8A3E), SceneMath.rgba(0x4C7432), 0.5 + 0.5 * n)
+            c = SceneMath.mix(park, SceneMath.rgba(0x8E8D88), patch * 1.2 - 0.1)
         case .forest:
             c = SceneMath.mix(SceneMath.rgba(0x4C6E2E), SceneMath.rgba(0x3A5A24), 0.5 + 0.5 * patch)
         case .countryside, .lakes:
@@ -220,6 +223,11 @@ enum WorldBuilder {
         var mesh = MeshData()
         var vertexHeights: [Double] = []
         var vertexRoadDist: [Double?] = []
+        // A vertex is "owned" by this stretch of road unless another part of the
+        // route (the next switchback, the other side of a hairpin) is nearer.
+        // Only triangles touching an owned vertex are kept, so corridor strips of
+        // stacked hairpins never draw over each other's roads.
+        var owned: [Bool] = []
         vertexHeights.reserveCapacity(rows * cols)
 
         for r in 0..<rows {
@@ -228,18 +236,21 @@ enum WorldBuilder {
             let dir = route.direction(at: d)
             let right = LocalPoint(x: dir.y, y: -dir.x)
             var rowHeights: [Double] = []
+            var rowOwned: [Bool] = []
             for o in offsets {
                 let q = p + right * o
-                var h = terrain.height(x: q.x, y: q.y)
+                let h = terrain.height(x: q.x, y: q.y)
                 // Only a road nearer than our own (|o| away) can claim this vertex.
                 let hit = terrain.nearestRoad(x: q.x, y: q.y, maxDistance: abs(o) + 5)
+                var mine = true
                 if let hit {
-                    // Belongs to another part of the route (switchback above/below): tuck it under that road's own corridor.
                     var along = abs(hit.routeDistance - d)
                     if route.isLoop { along = min(along, route.length - along) }
-                    if along > max(60, abs(o) * 2.5) { h -= 1.5 }
+                    mine = along <= max(60, abs(o) * 2.5)
                 }
                 rowHeights.append(h)
+                rowOwned.append(mine)
+                owned.append(mine)
                 vertexRoadDist.append(hit?.distance)
                 mesh.addVertex(frame.point(q, h), uv: SIMD2(Float(q.x / 23), Float(q.y / 23)))
                 vertexHeights.append(h)
@@ -250,17 +261,27 @@ enum WorldBuilder {
                 mesh.addVertex(frame.point(q, h), uv: SIMD2(Float(q.x / 23), Float(q.y / 23)))
                 vertexHeights.append(h)
                 vertexRoadDist.append(nil)
+                owned.append(side < 0 ? rowOwned.first! : rowOwned.last!)
             }
+        }
+        func tri(_ a: Int, _ b: Int, _ c: Int) {
+            if owned[a] || owned[b] || owned[c] { mesh.addTriangle(UInt32(a), UInt32(b), UInt32(c)) }
+        }
+        func quad(_ a: Int, _ b: Int, _ c: Int, _ d: Int) {
+            tri(a, b, c)
+            tri(a, c, d)
         }
         let roadGap = corridorOffsets.count - 1            // column index of −5.5; next column is +5.5
         let skirtL = offsets.count, skirtR = offsets.count + 1
+        let lastCol = offsets.count - 1
         for r in 0..<(rows - 1) {
             let a0 = r * cols, b0 = (r + 1) * cols
-            for c in 0..<(offsets.count - 1) where c != roadGap {
-                mesh.addQuad(UInt32(a0 + c), UInt32(a0 + c + 1), UInt32(b0 + c + 1), UInt32(b0 + c))
+            for c in 0..<lastCol where c != roadGap {
+                quad(a0 + c, a0 + c + 1, b0 + c + 1, b0 + c)
             }
-            mesh.addQuad(UInt32(a0 + skirtL), UInt32(a0), UInt32(b0), UInt32(b0 + skirtL))
-            mesh.addQuad(UInt32(a0 + offsets.count - 1), UInt32(a0 + skirtR), UInt32(b0 + skirtR), UInt32(b0 + offsets.count - 1))
+            // Skirts only where the outer edge is ours (never drop a wall into a neighbouring switchback).
+            if owned[a0] && owned[b0] { quad(a0 + skirtL, a0, b0, b0 + skirtL) }
+            if owned[a0 + lastCol] && owned[b0 + lastCol] { quad(a0 + lastCol, a0 + skirtR, b0 + skirtR, b0 + lastCol) }
         }
         mesh.computeNormals()
         let water = terrain.waterLevel
@@ -467,7 +488,7 @@ enum WorldBuilder {
         let density: Double
         switch biome {
         case .alpine: kinds = [(.conifer, 0.85), (.deciduous, 0.15)]; density = 1.6
-        case .forest: kinds = [(.deciduous, 0.65), (.poplar, 0.15), (.conifer, 0.2)]; density = 2.6
+        case .forest: kinds = [(.deciduous, 0.65), (.poplar, 0.15), (.conifer, 0.2)]; density = 4.5
         case .countryside: kinds = [(.deciduous, 0.6), (.poplar, 0.4)]; density = 0.8
         case .coastal: kinds = [(.olive, 0.5), (.palm, 0.2), (.conifer, 0.3)]; density = 0.9
         case .lakes: kinds = [(.deciduous, 0.55), (.conifer, 0.35), (.poplar, 0.1)]; density = 1.4
@@ -488,7 +509,7 @@ enum WorldBuilder {
             let tries = Int(density * 2 + rng.range(0, 1))
             for _ in 0..<tries {
                 // Exponential falloff: dense near the road, thinning into the distance.
-                let lateral = 10 + min(900, -log(max(rng.unit(), 1e-6)) * 140)
+                let lateral = (biome == .forest ? 7.5 : 10) + min(900, -log(max(rng.unit(), 1e-6)) * (biome == .forest ? 60 : 140))
                 let side = rng.chance(0.5) ? 1.0 : -1.0
                 let q = p + right * (side * lateral) + dir * rng.range(-6, 6)
                 let forest = TerrainModel.fbm(q.x / 350, q.y / 350, octaves: 2, seed: 99)

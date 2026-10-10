@@ -105,9 +105,11 @@ enum ProceduralTextures {
     static func groundDetail() -> CGImage {
         let w = 512, h = 512
         let ctx = context(w, h)
-        ctx.setFillColor(cg(0xE6E6E6))
+        ctx.setFillColor(cg(0xEDEDED))
         ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
-        speckle(ctx, w: w, h: h, count: 26000, colors: [0xFFFFFF, 0xC8C8C8, 0xB0B0B0, 0xF2F2F2], size: 1...4, alpha: 0.3...0.8, seed: 21)
+        // Soft, low-contrast variation: broad blotches plus fine grain.
+        speckle(ctx, w: w, h: h, count: 900, colors: [0xFFFFFF, 0xDADADA], size: 18...60, alpha: 0.10...0.25, seed: 20)
+        speckle(ctx, w: w, h: h, count: 16000, colors: [0xFFFFFF, 0xD8D8D8, 0xE4E4E4], size: 1...3, alpha: 0.2...0.5, seed: 21)
         return ctx.makeImage()!
     }
 

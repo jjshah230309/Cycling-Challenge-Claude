@@ -461,7 +461,7 @@ final class RiderNode: SCNNode {
         ctx.addPath(CGPath(roundedRect: CGRect(x: 4, y: 4, width: w - 8, height: h - 8), cornerWidth: 26, cornerHeight: 26, transform: nil))
         ctx.fillPath()
         ProceduralTextures.drawText(text, in: ctx, rect: CGRect(x: 16, y: 8, width: w - 32, height: h - 16), color: 0xFFFFFF, maxSize: 56)
-        let plane = SCNPlane(width: 1.5, height: 0.33)
+        let plane = SCNPlane(width: 1.1, height: 0.24)
         let m = SCNMaterial()
         m.diffuse.contents = ctx.makeImage()
         m.lightingModel = .constant

@@ -40,7 +40,7 @@ jobs:
           path: build/Breakaway-macOS.zip
       - name: Render world snapshots
         timeout-minutes: 15
-        run: build/Breakaway.app/Contents/MacOS/Breakaway --snapshot build/snapshots alpe-dhuez,stelvio,arenberg,sanremo-finale,montreal-2026
+        run: build/Breakaway.app/Contents/MacOS/Breakaway --snapshot build/snapshots alpe-dhuez,stelvio,galibier,arenberg,sanremo-finale,montreal-2026
       - uses: actions/upload-artifact@v4
         if: always()
         with:
