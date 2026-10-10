@@ -18,7 +18,7 @@ enum Theme {
         return Color(red: c.r, green: c.g, blue: c.b)
     }
 
-    static func color(_ c: RGBColor) -> Color { Color(red: c.r, green: c.g, blue: c.b) }
+    static func color(_ c: KitColor) -> Color { Color(red: c.r, green: c.g, blue: c.b) }
 
     static func gradeColor(_ grade: Double) -> Color {
         switch grade {
@@ -31,7 +31,7 @@ enum Theme {
     }
 }
 
-extension RGBColor {
+extension KitColor {
     init(_ color: Color) {
         let ns = NSColor(color).usingColorSpace(.sRGB) ?? .white
         self.init(Double(ns.redComponent), Double(ns.greenComponent), Double(ns.blueComponent))

@@ -61,6 +61,28 @@ public struct RiderState: Identifiable, Sendable {
     public var wheelAngle: Double = 0
 
     public var wattsPerKg: Double { power / max(weightKg, 30) }
+
+    public init(id: String, name: String, nationCode: String, isPlayer: Bool, isPacer: Bool, distance: Double,
+                speed: Double, power: Double, cadence: Double, heartRate: Double?, lateral: Double, draft: Double,
+                weightKg: Double, kit: Kit, bike: BikeSetup, build: AvatarBuild, finishTime: Double? = nil) {
+        self.id = id
+        self.name = name
+        self.nationCode = nationCode
+        self.isPlayer = isPlayer
+        self.isPacer = isPacer
+        self.distance = distance
+        self.speed = speed
+        self.power = power
+        self.cadence = cadence
+        self.heartRate = heartRate
+        self.lateral = lateral
+        self.draft = draft
+        self.weightKg = weightKg
+        self.kit = kit
+        self.bike = bike
+        self.build = build
+        self.finishTime = finishTime
+    }
 }
 
 public struct PlayerInput: Sendable {
@@ -237,12 +259,12 @@ public final class RideSimulation {
             botProfile.bike = BikeSetup(frameID: frame.id, wheelsID: ["aero50", "deep80", "climber", "alloy"][Int(rng.next() % 4)])
             var kit = kits[i % kits.count]
             if !s.pacer {
-                kit.jersey = RGBColor(rng.range(0.1, 0.95), rng.range(0.1, 0.95), rng.range(0.1, 0.95))
-                kit.jerseyAccent = RGBColor(rng.range(0, 1), rng.range(0, 1), rng.range(0, 1))
-                kit.skin = [RGBColor(hex: 0xF1C27D), RGBColor(hex: 0xC68E6A), RGBColor(hex: 0x8D5A3B), RGBColor(hex: 0x5C3A21), RGBColor(hex: 0xE0AC8B)][i % 5]
+                kit.jersey = KitColor(rng.range(0.1, 0.95), rng.range(0.1, 0.95), rng.range(0.1, 0.95))
+                kit.jerseyAccent = KitColor(rng.range(0, 1), rng.range(0, 1), rng.range(0, 1))
+                kit.skin = [KitColor(hex: 0xF1C27D), KitColor(hex: 0xC68E6A), KitColor(hex: 0x8D5A3B), KitColor(hex: 0x5C3A21), KitColor(hex: 0xE0AC8B)][i % 5]
             } else {
-                kit.jersey = RGBColor(hex: 0x00C2FF)
-                kit.jerseyAccent = RGBColor(hex: 0xFFFFFF)
+                kit.jersey = KitColor(hex: 0x00C2FF)
+                kit.jerseyAccent = KitColor(hex: 0xFFFFFF)
             }
             let startDistance = route.isLoop ? s.start : max(0, s.start)
             let state = RiderState(id: "bot-\(i)", name: s.name, nationCode: s.nation, isPlayer: false, isPacer: s.pacer,

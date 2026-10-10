@@ -1,3 +1,4 @@
+import AppKit
 import BreakawayCore
 import Foundation
 import SceneKit
@@ -91,13 +92,17 @@ struct MeshData {
         }
         var sources = [source(positions, .vertex, 3), source(normals, .normal, 3), source(uvs, .texcoord, 2)]
         if includeColors { sources.append(source(colors, .color, 4)) }
-        let els = elements.map { idx -> SCNGeometryElement in
+        // Drop empty elements (e.g. no cobbled sections) together with their materials.
+        var els: [SCNGeometryElement] = []
+        var mats: [SCNMaterial] = []
+        for (i, idx) in elements.enumerated() where !idx.isEmpty {
             let data = idx.withUnsafeBufferPointer { Data(buffer: $0) }
-            return SCNGeometryElement(data: data, primitiveType: .triangles, primitiveCount: idx.count / 3,
-                                      bytesPerIndex: MemoryLayout<UInt32>.size)
+            els.append(SCNGeometryElement(data: data, primitiveType: .triangles, primitiveCount: idx.count / 3,
+                                          bytesPerIndex: MemoryLayout<UInt32>.size))
+            if let m = materials.indices.contains(i) ? materials[i] : materials.last { mats.append(m) }
         }
         let g = SCNGeometry(sources: sources, elements: els)
-        g.materials = materials
+        g.materials = mats
         return g
     }
 }
@@ -124,7 +129,7 @@ enum SceneMath {
         node.simdOrientation = alignY(to: b - a)
     }
 
-    static func color(_ c: RGBColor) -> NSColor {
+    static func color(_ c: KitColor) -> NSColor {
         NSColor(srgbRed: CGFloat(c.r), green: CGFloat(c.g), blue: CGFloat(c.b), alpha: 1)
     }
 

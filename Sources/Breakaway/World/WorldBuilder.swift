@@ -231,7 +231,8 @@ enum WorldBuilder {
             for o in offsets {
                 let q = p + right * o
                 var h = terrain.height(x: q.x, y: q.y)
-                let hit = terrain.nearestRoad(x: q.x, y: q.y, maxDistance: 300)
+                // Only a road nearer than our own (|o| away) can claim this vertex.
+                let hit = terrain.nearestRoad(x: q.x, y: q.y, maxDistance: abs(o) + 5)
                 if let hit {
                     // Belongs to another part of the route (switchback above/below): tuck it under that road's own corridor.
                     var along = abs(hit.routeDistance - d)
@@ -420,7 +421,8 @@ enum WorldBuilder {
             for k in 0..<3 {
                 let s = SCNSphere(radius: olive ? 1.6 : 2.6 - CGFloat(k) * 0.3)
                 s.segmentCount = 8
-                s.materials = [leaves(olive ? 0x7E8C5A : [0x3E6B2A, 0x4A7A30, 0x55813A][k])]
+                let greens: [UInt32] = [0x3E6B2A, 0x4A7A30, 0x55813A]
+                s.materials = [leaves(olive ? 0x7E8C5A : greens[k])]
                 let n = SCNNode(geometry: s)
                 n.simdPosition = SIMD3(Float(k == 1 ? 1.0 : (k == 2 ? -0.9 : 0)), olive ? 3.0 : 5.0 + Float(k) * 0.6, Float(k == 2 ? 0.7 : 0))
                 n.simdScale = SIMD3(1, olive ? 0.7 : 0.9, 1)
@@ -666,7 +668,8 @@ enum WorldBuilder {
             g.materials = [mat(c)]
             return g
         }
-        let flagMats = [0xD62828, 0x1D3557, 0xFCBF49, 0x2A9D8F, 0xFFFFFF].map { mat($0) }
+        let flagColors: [UInt32] = [0xD62828, 0x1D3557, 0xFCBF49, 0x2A9D8F, 0xFFFFFF]
+        let flagMats = flagColors.map { mat($0) }
 
         // Crowd zones: the final 3 km of big climbs, and the last 400 m before the line.
         var zones: [(start: Double, end: Double, peakAtEnd: Bool)] = route.climbs

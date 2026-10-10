@@ -108,9 +108,9 @@ struct ProfileView: View {
         return "\(lo)–\(Int(bounds[i + 1] * model.profile.ftp) - 1) W"
     }
 
-    private func colorBinding(_ path: WritableKeyPath<RiderProfile, RGBColor>) -> Binding<Color> {
+    private func colorBinding(_ path: WritableKeyPath<RiderProfile, KitColor>) -> Binding<Color> {
         Binding(get: { Theme.color(model.profile[keyPath: path]) },
-                set: { model.profile[keyPath: path] = RGBColor($0) })
+                set: { model.profile[keyPath: path] = KitColor($0) })
     }
 }
 

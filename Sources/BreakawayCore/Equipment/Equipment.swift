@@ -10,7 +10,7 @@ public enum HandlebarStyle: String, Codable, Sendable {
     case drops, aeroDrops, timeTrialExtensions, flaredDrops, bullhorn
 }
 
-public struct RGBColor: Codable, Hashable, Sendable {
+public struct KitColor: Codable, Hashable, Sendable {
     public var r: Double, g: Double, b: Double
 
     public init(_ r: Double, _ g: Double, _ b: Double) {
@@ -42,8 +42,8 @@ public struct Frame: Identifiable, Codable, Hashable, Sendable {
     /// Rolling-resistance multiplier on rough surfaces (tyre width / compliance).
     public var roughSurfaceFactor: Double
     public var tubeScale: Double
-    public var color: RGBColor
-    public var accent: RGBColor
+    public var color: KitColor
+    public var accent: KitColor
     public var unlockLevel: Int
     public var blurb: String
 }
@@ -69,31 +69,31 @@ public enum Garage {
     public static let frames: [Frame] = [
         Frame(id: "allroad", name: "Allroad Endurance", style: .endurance, handlebar: .drops, weight: 7.6,
               cdaFactor: 1.03, roughSurfaceFactor: 0.88, tubeScale: 1.0,
-              color: RGBColor(hex: 0x2F6FDE), accent: RGBColor(hex: 0xF2F2F2), unlockLevel: 1,
+              color: KitColor(hex: 0x2F6FDE), accent: KitColor(hex: 0xF2F2F2), unlockLevel: 1,
               blurb: "Relaxed geometry and compliant stays. A dependable all-rounder."),
         Frame(id: "summit", name: "Summit SL", style: .climbing, handlebar: .drops, weight: 6.1,
               cdaFactor: 1.0, roughSurfaceFactor: 1.0, tubeScale: 0.85,
-              color: RGBColor(hex: 0xD7263D), accent: RGBColor(hex: 0x1B1B1E), unlockLevel: 1,
+              color: KitColor(hex: 0xD7263D), accent: KitColor(hex: 0x1B1B1E), unlockLevel: 1,
               blurb: "Featherweight climbing frame with skinny round tubes. Built for the Stelvio."),
         Frame(id: "apex", name: "Apex Aero", style: .aero, handlebar: .aeroDrops, weight: 7.0,
               cdaFactor: 0.955, roughSurfaceFactor: 1.05, tubeScale: 1.3,
-              color: RGBColor(hex: 0x111111), accent: RGBColor(hex: 0x00D1B2), unlockLevel: 3,
+              color: KitColor(hex: 0x111111), accent: KitColor(hex: 0x00D1B2), unlockLevel: 3,
               blurb: "Truncated-aerofoil tubes and an integrated cockpit. Fastest road bike on the flat."),
         Frame(id: "velocity", name: "Velocity TT", style: .timeTrial, handlebar: .timeTrialExtensions, weight: 8.4,
               cdaFactor: 0.80, roughSurfaceFactor: 1.1, tubeScale: 1.45,
-              color: RGBColor(hex: 0xF5F5F5), accent: RGBColor(hex: 0xE63946), unlockLevel: 6,
+              color: KitColor(hex: 0xF5F5F5), accent: KitColor(hex: 0xE63946), unlockLevel: 6,
               blurb: "Low, long and narrow. Unbeatable against the clock, a handful on hairpins."),
         Frame(id: "nomad", name: "Nomad Gravel", style: .gravel, handlebar: .flaredDrops, weight: 8.6,
               cdaFactor: 1.06, roughSurfaceFactor: 0.72, tubeScale: 1.1,
-              color: RGBColor(hex: 0x6B8F71), accent: RGBColor(hex: 0xE9C46A), unlockLevel: 2,
+              color: KitColor(hex: 0x6B8F71), accent: KitColor(hex: 0xE9C46A), unlockLevel: 2,
               blurb: "Wide clearance and stable handling. Floats over the Arenberg cobbles."),
         Frame(id: "heritage", name: "Heritage Steel", style: .steel, handlebar: .drops, weight: 9.4,
               cdaFactor: 1.04, roughSurfaceFactor: 0.85, tubeScale: 0.7,
-              color: RGBColor(hex: 0x1D3557), accent: RGBColor(hex: 0xC0C0C0), unlockLevel: 4,
+              color: KitColor(hex: 0x1D3557), accent: KitColor(hex: 0xC0C0C0), unlockLevel: 4,
               blurb: "Lugged steel tubes and polished silver. Ride like it's 1985."),
         Frame(id: "piste", name: "Piste Track", style: .track, handlebar: .bullhorn, weight: 7.2,
               cdaFactor: 0.94, roughSurfaceFactor: 1.15, tubeScale: 1.2,
-              color: RGBColor(hex: 0xFFB703), accent: RGBColor(hex: 0x023047), unlockLevel: 8,
+              color: KitColor(hex: 0xFFB703), accent: KitColor(hex: 0x023047), unlockLevel: 8,
               blurb: "Stiff, aggressive pursuit geometry. Single gear, maximum attitude."),
     ]
 

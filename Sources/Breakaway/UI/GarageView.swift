@@ -7,39 +7,55 @@ struct GarageView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                BikePreview(profile: model.profile)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(LinearGradient(colors: [Color(red: 0.16, green: 0.18, blue: 0.24), Theme.background],
-                                               startPoint: .top, endPoint: .bottom))
-                bikeStats.padding(20)
-            }
-            .frame(minWidth: 420)
+            previewColumn
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     SectionHeader(title: "Garage", subtitle: "Frames and wheels change weight, aerodynamics and rolling resistance.")
-                    Text("FRAMES").font(.caption.bold()).foregroundStyle(Theme.secondaryText)
-                    ForEach(Garage.frames) { f in
-                        EquipmentRow(title: f.name, subtitle: f.blurb, detail: String(format: "%.1f kg · CdA ×%.2f", f.weight, f.cdaFactor),
-                                     swatch: Theme.color(f.color), locked: model.profile.level < f.unlockLevel, unlockLevel: f.unlockLevel,
-                                     selected: model.profile.bike.frameID == f.id) {
-                            model.profile.bike.frameID = f.id
-                        }
-                    }
-                    Text("WHEELS").font(.caption.bold()).foregroundStyle(Theme.secondaryText).padding(.top, 8)
-                    ForEach(Garage.wheels) { w in
-                        EquipmentRow(title: w.name, subtitle: w.blurb,
-                                     detail: String(format: "%.0f mm · %.2f kg · ΔCdA %+.3f", w.rimDepthMM, w.weight, w.cdaDelta),
-                                     swatch: .gray, locked: model.profile.level < w.unlockLevel, unlockLevel: w.unlockLevel,
-                                     selected: model.profile.bike.wheelsID == w.id) {
-                            model.profile.bike.wheelsID = w.id
-                        }
-                    }
+                    frameList
+                    wheelList
                 }
                 .padding(24)
             }
             .frame(width: 440)
             .background(Theme.panel.opacity(0.4))
+        }
+    }
+
+    private var previewColumn: some View {
+        VStack(spacing: 0) {
+            BikePreview(profile: model.profile)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(LinearGradient(colors: [Color(red: 0.16, green: 0.18, blue: 0.24), Theme.background],
+                                           startPoint: .top, endPoint: .bottom))
+            bikeStats.padding(20)
+        }
+        .frame(minWidth: 420)
+    }
+
+    private var frameList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("FRAMES").font(.caption.bold()).foregroundStyle(Theme.secondaryText)
+            ForEach(Garage.frames) { f in
+                EquipmentRow(title: f.name, subtitle: f.blurb, detail: String(format: "%.1f kg · CdA ×%.2f", f.weight, f.cdaFactor),
+                             swatch: Theme.color(f.color), locked: model.profile.level < f.unlockLevel, unlockLevel: f.unlockLevel,
+                             selected: model.profile.bike.frameID == f.id) {
+                    model.profile.bike.frameID = f.id
+                }
+            }
+        }
+    }
+
+    private var wheelList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("WHEELS").font(.caption.bold()).foregroundStyle(Theme.secondaryText).padding(.top, 8)
+            ForEach(Garage.wheels) { w in
+                EquipmentRow(title: w.name, subtitle: w.blurb,
+                             detail: String(format: "%.0f mm · %.2f kg · ΔCdA %+.3f", w.rimDepthMM, w.weight, w.cdaDelta),
+                             swatch: .gray, locked: model.profile.level < w.unlockLevel, unlockLevel: w.unlockLevel,
+                             selected: model.profile.bike.wheelsID == w.id) {
+                    model.profile.bike.wheelsID = w.id
+                }
+            }
         }
     }
 

@@ -9,13 +9,13 @@ public enum AvatarBuild: String, Codable, CaseIterable, Sendable {
 }
 
 public struct Kit: Codable, Hashable, Sendable {
-    public var jersey: RGBColor
-    public var jerseyAccent: RGBColor
-    public var shorts: RGBColor
-    public var helmet: RGBColor
-    public var skin: RGBColor
+    public var jersey: KitColor
+    public var jerseyAccent: KitColor
+    public var shorts: KitColor
+    public var helmet: KitColor
+    public var skin: KitColor
 
-    public init(jersey: RGBColor, jerseyAccent: RGBColor, shorts: RGBColor, helmet: RGBColor, skin: RGBColor) {
+    public init(jersey: KitColor, jerseyAccent: KitColor, shorts: KitColor, helmet: KitColor, skin: KitColor) {
         self.jersey = jersey
         self.jerseyAccent = jerseyAccent
         self.shorts = shorts
@@ -23,18 +23,18 @@ public struct Kit: Codable, Hashable, Sendable {
         self.skin = skin
     }
 
-    public static let `default` = Kit(jersey: RGBColor(hex: 0xF4D35E), jerseyAccent: RGBColor(hex: 0x0D3B66),
-                                      shorts: RGBColor(hex: 0x141414), helmet: RGBColor(hex: 0xFAFAFA),
-                                      skin: RGBColor(hex: 0xC68E6A))
+    public static let `default` = Kit(jersey: KitColor(hex: 0xF4D35E), jerseyAccent: KitColor(hex: 0x0D3B66),
+                                      shorts: KitColor(hex: 0x141414), helmet: KitColor(hex: 0xFAFAFA),
+                                      skin: KitColor(hex: 0xC68E6A))
 
     /// Famous jersey palettes (classification jerseys and world champion bands).
     public static let presets: [(name: String, kit: Kit)] = [
         ("Yellow", .default),
-        ("Rainbow Bands", Kit(jersey: RGBColor(hex: 0xFAFAFA), jerseyAccent: RGBColor(hex: 0x1E88E5), shorts: RGBColor(hex: 0x141414), helmet: RGBColor(hex: 0xFAFAFA), skin: RGBColor(hex: 0xC68E6A))),
-        ("Maglia Rosa", Kit(jersey: RGBColor(hex: 0xF4A7C0), jerseyAccent: RGBColor(hex: 0x2B2B2B), shorts: RGBColor(hex: 0x141414), helmet: RGBColor(hex: 0xF4A7C0), skin: RGBColor(hex: 0xE0AC8B))),
-        ("Polka Dot", Kit(jersey: RGBColor(hex: 0xFFFFFF), jerseyAccent: RGBColor(hex: 0xD62828), shorts: RGBColor(hex: 0x141414), helmet: RGBColor(hex: 0xD62828), skin: RGBColor(hex: 0x8D5A3B))),
-        ("Green Points", Kit(jersey: RGBColor(hex: 0x2A9D8F), jerseyAccent: RGBColor(hex: 0xFFFFFF), shorts: RGBColor(hex: 0x141414), helmet: RGBColor(hex: 0x2A9D8F), skin: RGBColor(hex: 0xF1C27D))),
-        ("La Roja", Kit(jersey: RGBColor(hex: 0xC1121F), jerseyAccent: RGBColor(hex: 0xFDF0D5), shorts: RGBColor(hex: 0x141414), helmet: RGBColor(hex: 0x111111), skin: RGBColor(hex: 0x5C3A21))),
+        ("Rainbow Bands", Kit(jersey: KitColor(hex: 0xFAFAFA), jerseyAccent: KitColor(hex: 0x1E88E5), shorts: KitColor(hex: 0x141414), helmet: KitColor(hex: 0xFAFAFA), skin: KitColor(hex: 0xC68E6A))),
+        ("Maglia Rosa", Kit(jersey: KitColor(hex: 0xF4A7C0), jerseyAccent: KitColor(hex: 0x2B2B2B), shorts: KitColor(hex: 0x141414), helmet: KitColor(hex: 0xF4A7C0), skin: KitColor(hex: 0xE0AC8B))),
+        ("Polka Dot", Kit(jersey: KitColor(hex: 0xFFFFFF), jerseyAccent: KitColor(hex: 0xD62828), shorts: KitColor(hex: 0x141414), helmet: KitColor(hex: 0xD62828), skin: KitColor(hex: 0x8D5A3B))),
+        ("Green Points", Kit(jersey: KitColor(hex: 0x2A9D8F), jerseyAccent: KitColor(hex: 0xFFFFFF), shorts: KitColor(hex: 0x141414), helmet: KitColor(hex: 0x2A9D8F), skin: KitColor(hex: 0xF1C27D))),
+        ("La Roja", Kit(jersey: KitColor(hex: 0xC1121F), jerseyAccent: KitColor(hex: 0xFDF0D5), shorts: KitColor(hex: 0x141414), helmet: KitColor(hex: 0x111111), skin: KitColor(hex: 0x5C3A21))),
     ]
 }
 
@@ -143,15 +143,15 @@ public enum PowerZone: Int, CaseIterable, Codable, Sendable {
     }
 
     /// Zone colours (grey → blue → green → yellow → orange → red → purple).
-    public var color: RGBColor {
+    public var color: KitColor {
         switch self {
-        case .recovery: return RGBColor(hex: 0x9E9E9E)
-        case .endurance: return RGBColor(hex: 0x2F80ED)
-        case .tempo: return RGBColor(hex: 0x27AE60)
-        case .threshold: return RGBColor(hex: 0xF2C94C)
-        case .vo2max: return RGBColor(hex: 0xF2994A)
-        case .anaerobic: return RGBColor(hex: 0xEB5757)
-        case .neuromuscular: return RGBColor(hex: 0x9B51E0)
+        case .recovery: return KitColor(hex: 0x9E9E9E)
+        case .endurance: return KitColor(hex: 0x2F80ED)
+        case .tempo: return KitColor(hex: 0x27AE60)
+        case .threshold: return KitColor(hex: 0xF2C94C)
+        case .vo2max: return KitColor(hex: 0xF2994A)
+        case .anaerobic: return KitColor(hex: 0xEB5757)
+        case .neuromuscular: return KitColor(hex: 0x9B51E0)
         }
     }
 }
