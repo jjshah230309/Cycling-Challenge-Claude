@@ -3,6 +3,7 @@ import BreakawayCore
 import Foundation
 import Metal
 import SceneKit
+import SwiftUI
 
 /// Headless renderer used by CI and for quick visual checks:
 ///
@@ -10,6 +11,7 @@ import SceneKit
 ///
 /// Builds each route's world, rides the simulation to the most interesting
 /// point (two-thirds up its biggest climb) and writes PNGs from several cameras.
+@MainActor
 enum SnapshotTool {
     static func runIfRequested() {
         let args = CommandLine.arguments
@@ -18,18 +20,20 @@ enum SnapshotTool {
         try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
         let ids = args.count > i + 2 ? args[i + 2].split(separator: ",").map(String.init) : RouteCatalog.all.map(\.id)
         var failures = 0
+        let devices = DeviceManager()
+        devices.virtualPowerEnabled = true
         for id in ids {
             guard let route = RouteCatalog.route(id: id) else {
                 print("unknown route \(id)")
                 failures += 1
                 continue
             }
-            if !render(route: route, to: out) { failures += 1 }
+            if !render(route: route, to: out, devices: devices) { failures += 1 }
         }
         exit(failures == 0 ? 0 : 1)
     }
 
-    private static func render(route: Route, to dir: URL) -> Bool {
+    private static func render(route: Route, to dir: URL, devices: DeviceManager) -> Bool {
         let t0 = Date()
         let world = WorldBuilder.build(route: route) { _, _ in }
         let buildTime = Date().timeIntervalSince(t0)
@@ -65,6 +69,24 @@ enum SnapshotTool {
             }
             let file = dir.appendingPathComponent("\(route.id)-\(mode.title.lowercased().replacingOccurrences(of: " ", with: "-")).png")
             try? png.write(to: file)
+        }
+        // Full in-ride frame: chase camera + the SwiftUI HUD composited on top.
+        for _ in 0..<90 { renderer.update(simulation: sim, dt: 1.0 / 30, mode: .chase) }
+        let frame3D = scn.snapshot(atTime: 0, with: CGSize(width: 1440, height: 900), antialiasingMode: .multisampling4X)
+        let controller = RideController(simulation: sim, devices: devices, renderer: renderer)
+        let hud = ZStack {
+            Image(nsImage: frame3D).resizable()
+            RideHUD(controller: controller, hud: controller.hud, profile: sim.profile, showsControls: false)
+        }
+        .frame(width: 1440, height: 900)
+        .environment(\.colorScheme, .dark)
+        let r = ImageRenderer(content: hud)
+        r.scale = 1
+        if let img = r.nsImage, let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil),
+           let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) {
+            try? png.write(to: dir.appendingPathComponent("\(route.id)-ride.png"))
+        } else {
+            print("✗ \(route.id): HUD composite failed")
         }
         print(String(format: "✓ %@  world %.1fs  at km %.2f  elev %.0f m", route.id, buildTime, sim.player.distance / 1000,
                      route.elevation(at: sim.player.distance)))

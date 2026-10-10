@@ -122,6 +122,17 @@ final class RideController: ObservableObject {
         installKeyMonitor()
     }
 
+    /// Snapshot / preview use: wraps an already-built world, no timers or key handling.
+    init(simulation: RideSimulation, devices: DeviceManager, renderer: WorldRenderer) {
+        self.simulation = simulation
+        self.devices = devices
+        self.onEnd = { _, _ in }
+        self.renderer = renderer
+        phase = .riding
+        for e in simulation.drainEvents() { handle(e) }
+        publishHUD()
+    }
+
     // MARK: - Lifecycle
 
     private func loadWorld() {

@@ -9,7 +9,9 @@ struct BreakawayApp: App {
 
     init() {
         // `Breakaway --snapshot <dir> [routes]` renders the 3D world headlessly and exits.
-        SnapshotTool.runIfRequested()
+        if CommandLine.arguments.contains("--snapshot"), #available(macOS 14.0, *) {
+            MainActor.assumeIsolated { SnapshotTool.runIfRequested() }
+        }
     }
 
     var body: some Scene {

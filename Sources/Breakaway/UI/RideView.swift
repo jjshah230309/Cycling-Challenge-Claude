@@ -49,6 +49,7 @@ struct RideHUD: View {
     @ObservedObject var controller: RideController
     let hud: HUDState
     let profile: RiderProfile
+    var showsControls = true
 
     var body: some View {
         let u = profile.units
@@ -80,7 +81,7 @@ struct RideHUD: View {
                     .hudPanel()
                 gradePanel
             }
-            controlsHint
+            if showsControls { controlsHint }
         }
         .padding(16)
     }
@@ -219,7 +220,13 @@ struct ClimbBanner: View {
                 Spacer()
                 Text(Units.clock(climb.elapsed)).font(.system(.headline, design: .rounded)).monospacedDigit()
             }
-            ProgressView(value: min(max(progress, 0), 1)).tint(Theme.kom)
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.15))
+                    Capsule().fill(Theme.kom).frame(width: g.size.width * min(max(progress, 0), 1))
+                }
+            }
+            .frame(height: 6)
             HStack {
                 Text(String(format: "%.2f %@ to the top · avg %.1f%%", toGo.value, toGo.unit, climb.averageGrade * 100))
                 Spacer()
