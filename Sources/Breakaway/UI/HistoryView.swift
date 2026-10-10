@@ -125,18 +125,22 @@ struct MetricsGrid: View {
         let e = Units.elevation(metrics.elevationGain, units)
         let v = Units.speed(metrics.averageSpeed, units)
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 6), alignment: .leading, spacing: 14) {
-            StatBlock(label: "Distance", value: String(format: "%.2f", d.value), unit: d.unit)
-            StatBlock(label: "Time", value: Units.clock(metrics.duration))
-            StatBlock(label: "Elevation", value: "\(Int(e.value))", unit: e.unit)
-            StatBlock(label: "Avg speed", value: String(format: "%.1f", v.value), unit: v.unit)
-            StatBlock(label: "Avg power", value: "\(Int(metrics.averagePower))", unit: "W")
-            StatBlock(label: "Norm. power", value: "\(Int(metrics.normalizedPower))", unit: "W")
-            StatBlock(label: "W/kg (NP)", value: String(format: "%.2f", metrics.normalizedPower / max(weight, 30)))
-            StatBlock(label: "IF", value: String(format: "%.2f", metrics.intensityFactor))
-            StatBlock(label: "TSS", value: "\(Int(metrics.trainingStressScore))")
-            StatBlock(label: "Work", value: "\(Int(metrics.kilojoules))", unit: "kJ")
-            StatBlock(label: "Max power", value: "\(Int(metrics.maxPower))", unit: "W")
-            StatBlock(label: "Avg HR", value: metrics.averageHeartRate.map { "\(Int($0))" } ?? "—", unit: "bpm")
+            Group {
+                StatBlock(label: "Distance", value: String(format: "%.2f", d.value), unit: d.unit)
+                StatBlock(label: "Time", value: Units.clock(metrics.duration))
+                StatBlock(label: "Elevation", value: "\(Int(e.value))", unit: e.unit)
+                StatBlock(label: "Avg speed", value: String(format: "%.1f", v.value), unit: v.unit)
+                StatBlock(label: "Avg power", value: "\(Int(metrics.averagePower))", unit: "W")
+                StatBlock(label: "Norm. power", value: "\(Int(metrics.normalizedPower))", unit: "W")
+            }
+            Group {
+                StatBlock(label: "W/kg (NP)", value: String(format: "%.2f", metrics.normalizedPower / max(weight, 30)))
+                StatBlock(label: "IF", value: String(format: "%.2f", metrics.intensityFactor))
+                StatBlock(label: "TSS", value: "\(Int(metrics.trainingStressScore))")
+                StatBlock(label: "Work", value: "\(Int(metrics.kilojoules))", unit: "kJ")
+                StatBlock(label: "Max power", value: "\(Int(metrics.maxPower))", unit: "W")
+                StatBlock(label: "Avg HR", value: metrics.averageHeartRate.map { "\(Int($0))" } ?? "—", unit: "bpm")
+            }
         }
         .padding(16)
         .background(Theme.panel, in: RoundedRectangle(cornerRadius: 14))
