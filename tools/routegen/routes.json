@@ -31,7 +31,8 @@
       "laps": 1,
       "router": "car",
       "max_grade": 12,
-      "terrain_grid": 56
+      "terrain_grid": 56,
+      "monotone": true
     },
     {
       "id": "mont-ventoux",
@@ -68,7 +69,8 @@
       "laps": 1,
       "router": "car",
       "max_grade": 12,
-      "terrain_grid": 56
+      "terrain_grid": 56,
+      "monotone": true
     },
     {
       "id": "tourmalet",
@@ -105,7 +107,8 @@
       "laps": 1,
       "router": "car",
       "max_grade": 11,
-      "terrain_grid": 56
+      "terrain_grid": 56,
+      "monotone": true
     },
     {
       "id": "galibier",
@@ -142,7 +145,8 @@
       "laps": 1,
       "router": "car",
       "max_grade": 12,
-      "terrain_grid": 56
+      "terrain_grid": 56,
+      "monotone": true
     },
     {
       "id": "stelvio",
@@ -179,7 +183,8 @@
       "laps": 1,
       "router": "car",
       "max_grade": 12,
-      "terrain_grid": 56
+      "terrain_grid": 56,
+      "monotone": true
     },
     {
       "id": "zoncolan",
@@ -212,7 +217,8 @@
       "laps": 1,
       "router": "car",
       "max_grade": 22,
-      "terrain_grid": 56
+      "terrain_grid": 56,
+      "monotone": true
     },
     {
       "id": "angliru",
@@ -245,7 +251,8 @@
       "laps": 1,
       "router": "car",
       "max_grade": 23.5,
-      "terrain_grid": 56
+      "terrain_grid": 56,
+      "monotone": true
     },
     {
       "id": "mortirolo",
@@ -278,7 +285,8 @@
       "laps": 1,
       "router": "car",
       "max_grade": 18,
-      "terrain_grid": 56
+      "terrain_grid": 56,
+      "monotone": true
     },
     {
       "id": "ghisallo",

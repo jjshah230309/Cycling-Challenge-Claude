@@ -13,14 +13,14 @@ sequence could not be confirmed (import the organiser's official GPX for a perfe
 
 | Route | Event | Data | Distance (built) | Distance (official) | Δ | Climbing (built) | Climbing (official) | Max grade (100 m) |
 |---|---|---|---:|---:|---:|---:|---:|---:|
-| Alpe d'Huez | Tour de France | verified | 13.83 km | 13.8 km | +0.2% | 1085 m | 1071 m | 12.6% |
-| Mont Ventoux (Bédoin) | Tour de France | verified | 21.54 km | 21.8 km | -1.2% | 1578 m | 1617 m | 12.4% |
-| Col du Tourmalet (Luz) | Tour de France | verified | 19.09 km | 19.0 km | +0.5% | 1396 m | 1404 m | 11.2% |
-| Col du Galibier (Valloire) | Tour de France | verified | 18.23 km | 18.1 km | +0.7% | 1232 m | 1245 m | 12.2% |
-| Passo dello Stelvio (Prato) | Giro d'Italia | verified | 25.53 km | 24.3 km | +5.1% | 1851 m | 1808 m | 12.5% |
-| Monte Zoncolan (Ovaro) | Giro d'Italia | verified | 9.74 km | 10.1 km | -3.6% | 1188 m | 1210 m | 22.1% |
-| Alto de l'Angliru | Vuelta a España | verified | 12.47 km | 12.5 km | -0.3% | 1251 m | 1266 m | 23.7% |
-| Passo del Mortirolo (Mazzo) | Giro d'Italia | approximate | 11.32 km | 12.4 km | -8.7% | 1297 m | 1300 m | 18.2% |
+| Alpe d'Huez | Tour de France | verified | 13.83 km | 13.8 km | +0.2% | 1088 m | 1071 m | 12.4% |
+| Mont Ventoux (Bédoin) | Tour de France | verified | 21.54 km | 21.8 km | -1.2% | 1577 m | 1617 m | 12.3% |
+| Col du Tourmalet (Luz) | Tour de France | verified | 19.09 km | 19.0 km | +0.5% | 1406 m | 1404 m | 11.2% |
+| Col du Galibier (Valloire) | Tour de France | verified | 18.23 km | 18.1 km | +0.7% | 1224 m | 1245 m | 12.1% |
+| Passo dello Stelvio (Prato) | Giro d'Italia | verified | 25.53 km | 24.3 km | +5.1% | 1849 m | 1808 m | 12.3% |
+| Monte Zoncolan (Ovaro) | Giro d'Italia | verified | 9.74 km | 10.1 km | -3.6% | 1197 m | 1210 m | 22.1% |
+| Alto de l'Angliru | Vuelta a España | verified | 12.47 km | 12.5 km | -0.3% | 1245 m | 1266 m | 23.6% |
+| Passo del Mortirolo (Mazzo) | Giro d'Italia | approximate | 11.32 km | 12.4 km | -8.7% | 1303 m | 1300 m | 18.1% |
 | Madonna del Ghisallo | Il Lombardia | approximate | 11.24 km | 10.6 km | +6.0% | 599 m | — | 14.2% |
 | Milano–Sanremo Finale | Milano–Sanremo | traced | 26.21 km | — | — | 521 m | — | 8.9% |
 | Paris–Roubaix Finale | Paris–Roubaix | traced | 18.59 km | — | — | 68 m | — | 4.4% |

@@ -50,6 +50,18 @@ final class RouteAndSimulationTests: XCTestCase {
         XCTAssertLessThan(names.firstIndex(of: "Cipressa")!, names.firstIndex(of: "Poggio")!)
     }
 
+    /// Grand Tour climbs only go up: no DEM-noise dips that would let a rider freewheel mid-climb.
+    func testGrandTourClimbsNeverFakeADescent() {
+        for rec in RouteCatalog.all where rec.category == .grandTourClimb {
+            let r = Route(record: rec)
+            var worstDrop = 0.0
+            for d in stride(from: 0.0, to: r.length - 100, by: 25) {
+                worstDrop = max(worstDrop, r.elevation(at: d) - r.elevation(at: d + 100))
+            }
+            XCTAssertLessThan(worstDrop, 0.5, rec.id)
+        }
+    }
+
     func testCobbledSectorsArePresent() throws {
         let arenberg = try XCTUnwrap(RouteCatalog.route(id: "arenberg"))
         let sector = try XCTUnwrap(arenberg.record.surfaces.first)

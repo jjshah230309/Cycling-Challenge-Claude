@@ -269,6 +269,27 @@ def clamp_grades(dist, elev, max_grade_pct, loop=False):
     return [e + drift * (d / total) for e, d in zip(out, dist)]
 
 
+def isotonic(dist, values):
+    """
+    Pool-adjacent-violators fit of a non-decreasing profile (weighted by segment
+    length). Grand Tour climbs never really descend; DEM noise on roads cut into
+    cliffs fakes dips that would let a rider freewheel at 40 km/h mid-climb.
+    """
+    n = len(values)
+    w = [max(1e-3, (dist[min(i + 1, n - 1)] - dist[max(i - 1, 0)]) / 2) for i in range(n)]
+    blocks = []  # [mean, weight, count]
+    for v, wi in zip(values, w):
+        blocks.append([v, wi, 1])
+        while len(blocks) > 1 and blocks[-2][0] > blocks[-1][0]:
+            m2, w2, c2 = blocks.pop()
+            m1, w1, c1 = blocks.pop()
+            blocks.append([(m1 * w1 + m2 * w2) / (w1 + w2), w1 + w2, c1 + c2])
+    out = []
+    for m, _, c in blocks:
+        out += [m] * c
+    return out
+
+
 def project_onto(coords, cum, point, after=0.0):
     """Distance along track of the closest vertex to `point` (searching after `after`)."""
     best, best_d = None, float("inf")
@@ -418,7 +439,16 @@ def build(spec, with_terrain=True):
     print(f"  {len(coords)} vertices, {total / 1000:.2f} km — sampling {len(sample_pts)} elevations…", flush=True)
     sample_e = elevations(sample_pts)
     elev = [interp(sample_d, sample_e, d) for d in cum]
-    elev = gaussian_smooth(cum, elev, spec.get("smooth_sigma", 90.0), loop=spec.get("loop", False))
+    if spec.get("monotone"):
+        # Fit a non-decreasing profile, then smooth so pooled plateaus become gentle ramps.
+        raw_start, raw_end = elev[0], elev[-1]
+        elev = isotonic(cum, elev)
+        elev = gaussian_smooth(cum, elev, spec.get("smooth_sigma", 110.0))
+        # Keep the surveyed start and summit heights.
+        span = max(elev[-1] - elev[0], 1e-6)
+        elev = [raw_start + (e - elev[0]) / span * (raw_end - raw_start) for e in elev]
+    else:
+        elev = gaussian_smooth(cum, elev, spec.get("smooth_sigma", 90.0), loop=spec.get("loop", False))
     elev = clamp_grades(cum, elev, spec.get("max_grade", 16.0), loop=spec.get("loop", False))
 
     gain = sum(max(0.0, b - a) for a, b in zip(elev, elev[1:]))
@@ -640,6 +670,14 @@ def main():
             print(f"     segment {g['name']}: {length / 1000:.2f} km @ {rise / max(length, 1) * 100:.1f}%")
         for x in r["surfaces"]:
             print(f"     surface {x['surface']} {x['name']}: {x['start']}–{x['end']} m")
+        if args.only:
+            cumr = cumulative(r["coords"])
+            kms = []
+            for k in range(int(r["distance"] // 1000)):
+                a = interp(cumr, r["elev"], k * 1000.0)
+                b = interp(cumr, r["elev"], (k + 1) * 1000.0)
+                kms.append(f"{(b - a) / 10:.1f}")
+            print("     km-by-km %: " + " ".join(kms))
         if args.only and os.environ.get("SHOW_SPANS"):
             for n, a, b in r["spans"]:
                 print(f"       {a:7.0f}–{b:7.0f}  {n}")
