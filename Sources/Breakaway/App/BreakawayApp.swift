@@ -7,6 +7,11 @@ struct BreakawayApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
 
+    init() {
+        // `Breakaway --snapshot <dir> [routes]` renders the 3D world headlessly and exits.
+        SnapshotTool.runIfRequested()
+    }
+
     var body: some Scene {
         WindowGroup("Breakaway") {
             RootView()
