@@ -119,16 +119,18 @@ enum WorldBuilder {
         case .alpine:
             let meadow = SceneMath.mix(SceneMath.rgba(0x5F8A3A), SceneMath.rgba(0x46702C), 0.5 + 0.5 * patch)
             let forest = SceneMath.rgba(0x2E4A26)
-            let alpineGrass = SceneMath.mix(SceneMath.rgba(0x6F8A47), SceneMath.rgba(0x7D8B55), 0.5 + 0.5 * n)
-            let rock = SceneMath.mix(SceneMath.rgba(0x7C7B78), SceneMath.rgba(0x99978F), 0.5 + 0.5 * n)
+            let alpineGrass = SceneMath.mix(SceneMath.rgba(0x6F8A45), SceneMath.rgba(0x93A060), 0.5 + 0.5 * n)
+            let scree = SceneMath.mix(SceneMath.rgba(0x9C978C), SceneMath.rgba(0x7E786E), 0.5 + 0.5 * n)
+            let rock = SceneMath.mix(SceneMath.rgba(0x5F5B55), SceneMath.rgba(0x7A746B), 0.5 + 0.5 * n)
             let snow = SceneMath.rgba(0xF3F6FA)
             let e = Float(elevation)
             // Dark conifer forest patches on the lower slopes.
             c = SceneMath.mix(meadow, forest, (patch - 0.05) * 3 * (e < 1950 ? 1 : 0))
             c = SceneMath.mix(c, alpineGrass, (e - 2000 - 150 * n) / 400)
-            c = SceneMath.mix(c, rock, (slope - 0.55) / 0.2)
-            c = SceneMath.mix(c, rock, (e - 2500 - 120 * n) / 300 * 0.7)
-            c = SceneMath.mix(c, snow, (e - 2850 - 150 * patch) / 250 * (slope < 0.75 ? 1 : 0.3))
+            // Scree fans and bare rock on steep ground; more of both higher up.
+            c = SceneMath.mix(c, scree, (patch + 0.15) * 2.5 * (e > 2300 ? 1 : 0) * min(1, (e - 2300) / 300))
+            c = SceneMath.mix(c, rock, (slope - 0.42 + (e - 2600) / 3000) / 0.18)
+            c = SceneMath.mix(c, snow, (e - 2900 - 150 * patch) / 220 * (slope < 0.6 ? 1 : 0.25))
         case .coastal:
             let scrub = SceneMath.mix(SceneMath.rgba(0x7A8A48), SceneMath.rgba(0x5E7038), 0.5 + 0.5 * patch)
             c = SceneMath.mix(scrub, SceneMath.rgba(0xA89C82), (slope - 0.5) / 0.25)

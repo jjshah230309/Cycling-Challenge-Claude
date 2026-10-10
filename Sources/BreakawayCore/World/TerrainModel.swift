@@ -25,6 +25,12 @@ public final class TerrainModel: @unchecked Sendable {
 
     private let projection: LocalProjection
     private let grid: RouteRecord.TerrainGrid?
+    /// Road-anchoring correction (metres) on a regular grid; see `buildCorrection`.
+    private var correction: [Float] = []
+    /// 0 on/near the road, 1 beyond ~600 m: where extra relief may be added.
+    private var remoteness: [Float] = []
+    private var correctionNX = 0, correctionNY = 0
+    private static let correctionCell = 30.0
     private let gridHeights: [Double]
     private let road: RoadIndex
     private let detailAmplitude: Double
@@ -65,6 +71,68 @@ public final class TerrainModel: @unchecked Sendable {
         }
         lowestPoint = gridHeights.min() ?? route.minElevation - 50
         highestPoint = max(gridHeights.max() ?? route.maxElevation + 200, route.maxElevation)
+        buildCorrection(route: route)
+    }
+
+    /// The bundled DEM grid is coarse (100–300 m), so around hairpin stacks it can
+    /// sit tens of metres above or below the surveyed road. Anchor the terrain to
+    /// the road: measure the road-vs-DEM offset along the route and spread it out
+    /// with inverse-distance weighting, fading to zero 100–600 m from the road.
+    private func buildCorrection(route: Route) {
+        guard grid != nil else { return }
+        let cell = TerrainModel.correctionCell
+        let radius = 600.0, core = 20.0
+        let nx = Int(ceil(width / cell)) + 1, ny = Int(ceil(depth / cell)) + 1
+        var sumW = [Double](repeating: 0, count: nx * ny)
+        var sumWD = [Double](repeating: 0, count: nx * ny)
+        var dmin = [Double](repeating: .infinity, count: nx * ny)
+        let rc = Int(radius / cell)
+        var d = 0.0
+        while d <= route.length {
+            let p = route.position(at: d)
+            let delta = route.elevation(at: d) - demHeight(x: p.x, y: p.y)
+            let ci = Int(((p.x - minX) / cell).rounded()), cj = Int(((p.y - minY) / cell).rounded())
+            for j in max(0, cj - rc)...min(ny - 1, max(0, cj + rc)) {
+                let cy = minY + Double(j) * cell
+                for i in max(0, ci - rc)...min(nx - 1, max(0, ci + rc)) {
+                    let cx = minX + Double(i) * cell
+                    let dx = cx - p.x, dy = cy - p.y
+                    let dd2 = dx * dx + dy * dy
+                    guard dd2 <= radius * radius else { continue }
+                    let w = 1 / (dd2 + core * core)
+                    let k = j * nx + i
+                    sumW[k] += w
+                    sumWD[k] += w * delta
+                    dmin[k] = min(dmin[k], dd2)
+                }
+            }
+            d += 15
+        }
+        correction = (0..<(nx * ny)).map { k in
+            guard sumW[k] > 0 else { return 0 }
+            let coverage = 1 - TerrainModel.smoothstep(100, radius, dmin[k].squareRoot())
+            return Float(sumWD[k] / sumW[k] * coverage)
+        }
+        remoteness = dmin.map { Float(TerrainModel.smoothstep(150, radius, $0.squareRoot())) }
+        correctionNX = nx
+        correctionNY = ny
+    }
+
+    private func correctionAt(x: Double, y: Double) -> Double { sampleGrid(correction, x: x, y: y, outside: 0) }
+
+    private func remotenessAt(x: Double, y: Double) -> Double { sampleGrid(remoteness, x: x, y: y, outside: 1) }
+
+    private func sampleGrid(_ values: [Float], x: Double, y: Double, outside: Double) -> Double {
+        guard !values.isEmpty else { return outside }
+        let cell = TerrainModel.correctionCell
+        let fx = min(max((x - minX) / cell, 0), Double(correctionNX - 1))
+        let fy = min(max((y - minY) / cell, 0), Double(correctionNY - 1))
+        let i = min(Int(fx), correctionNX - 2), j = min(Int(fy), correctionNY - 2)
+        let tx = Float(fx - Double(i)), ty = Float(fy - Double(j))
+        let n = correctionNX
+        let a = values[j * n + i], b = values[j * n + i + 1]
+        let c = values[(j + 1) * n + i], e = values[(j + 1) * n + i + 1]
+        return Double((a + (b - a) * tx) * (1 - ty) + (c + (e - c) * tx) * ty)
     }
 
     public var width: Double { maxX - minX }
@@ -83,7 +151,7 @@ public final class TerrainModel: @unchecked Sendable {
 
     /// Ground height ignoring the road (DEM + detail).
     public func naturalHeight(x: Double, y: Double) -> Double {
-        var h = demHeight(x: x, y: y)
+        var h = demHeight(x: x, y: y) + correctionAt(x: x, y: y)
         h += detail(x: x, y: y)
         if let w = waterLevel, h < w + 0.5 {
             // Keep shorelines from fizzing with detail noise.
@@ -141,7 +209,16 @@ public final class TerrainModel: @unchecked Sendable {
     }
 
     func detail(x: Double, y: Double) -> Double {
-        detailAmplitude * TerrainModel.fbm(x / 160, y / 160, octaves: 4, seed: 3)
+        var h = detailAmplitude * TerrainModel.fbm(x / 160, y / 160, octaves: 4, seed: 3)
+        // Coarse DEMs smooth peaks into domes; add ridges and gullies away from the road.
+        if grid != nil {
+            let far = remotenessAt(x: x, y: y)
+            if far > 0 {
+                let ridge = 1 - abs(TerrainModel.fbm(x / 700, y / 700, octaves: 3, seed: 8)) * 2
+                h += far * detailAmplitude * 2.6 * ridge
+            }
+        }
+        return h
     }
 
     // MARK: - Noise

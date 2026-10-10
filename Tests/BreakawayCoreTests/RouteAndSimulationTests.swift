@@ -70,6 +70,20 @@ final class RouteAndSimulationTests: XCTestCase {
         XCTAssertLessThan(t.lowestPoint, 1000)
     }
 
+    /// The DEM grid is coarse; the terrain must still sit on the surveyed road
+    /// (otherwise hairpin stacks get walls and cuttings tens of metres high).
+    func testTerrainIsAnchoredToTheRoad() throws {
+        for id in ["stelvio", "alpe-dhuez", "galibier", "zoncolan", "angliru"] {
+            let r = try XCTUnwrap(RouteCatalog.route(id: id))
+            let errors = stride(from: 0.0, to: r.length, by: 50).map { d -> Double in
+                let p = r.position(at: d)
+                return abs(r.terrain.naturalHeight(x: p.x, y: p.y) - r.elevation(at: d))
+            }.sorted()
+            XCTAssertLessThan(errors[errors.count / 2], 4, "\(id) median")
+            XCTAssertLessThan(errors[Int(Double(errors.count) * 0.9)], 10, "\(id) p90")
+        }
+    }
+
     func testWaterIsDetectedOnTheCoast() throws {
         let sanremo = try XCTUnwrap(RouteCatalog.route(id: "sanremo-finale"))
         XCTAssertNotNil(sanremo.terrain.waterLevel)
