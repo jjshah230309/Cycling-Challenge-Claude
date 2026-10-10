@@ -125,9 +125,26 @@ final class WorldRenderer {
             lookAt = riderPos + up * 1.0
             stiffness = 3
         }
-        // Never dip into the hillside.
-        let ground = Float(route.terrain.height(x: Double(targetPos.x), y: Double(-targetPos.z)) - frame.baseElevation)
-        targetPos.y = max(targetPos.y, ground + (mode == .firstPerson ? 0.3 : 0.9))
+        // Never dip into the hillside, and keep the rider in sight: on hairpins the
+        // inside bank can rise between camera and rider, so lift until the line is clear.
+        let terrain = route.terrain
+        func groundY(_ p: SIMD3<Float>) -> Float {
+            Float(terrain.height(x: Double(p.x), y: Double(-p.z)) - frame.baseElevation)
+        }
+        targetPos.y = max(targetPos.y, groundY(targetPos) + (mode == .firstPerson ? 0.3 : 0.9))
+        if mode != .firstPerson {
+            let focus = riderPos + up * 1.0
+            for _ in 0..<6 {
+                var worst: Float = 0
+                for k in 1..<10 {
+                    let t = Float(k) / 10
+                    let p = targetPos + (focus - targetPos) * t
+                    worst = max(worst, groundY(p) + 0.4 - p.y)
+                }
+                if worst <= 0 { break }
+                targetPos.y += worst + 0.5
+            }
+        }
 
         let k = 1 - exp(-stiffness * fdt)
         if let p = camPosition, let t = camTarget, dt < 0.5 {

@@ -246,9 +246,10 @@ enum WorldBuilder {
                 let hit = terrain.nearestRoad(x: q.x, y: q.y, maxDistance: abs(o) + 5)
                 var mine = true
                 if let hit {
+                    // Ours unless some *other* part of the road (not just this bend) is nearer than our own row.
                     var along = abs(hit.routeDistance - d)
                     if route.isLoop { along = min(along, route.length - along) }
-                    mine = along <= max(60, abs(o) * 2.5)
+                    mine = along < 20 || hit.distance > abs(o) - 2
                 }
                 rowHeights.append(h)
                 rowOwned.append(mine)
