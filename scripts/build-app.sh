@@ -6,14 +6,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# (macOS ships bash 3.2, where "${arr[@]}" on an empty array trips `set -u`.)
 ARCH_FLAGS=()
 if [[ "${1:-}" == "--universal" ]]; then
   ARCH_FLAGS=(--arch arm64 --arch x86_64)
 fi
 
 echo "▸ Compiling (release)…"
-swift build -c release --product Breakaway "${ARCH_FLAGS[@]}"
-BIN_DIR=$(swift build -c release --product Breakaway "${ARCH_FLAGS[@]}" --show-bin-path)
+swift build -c release --product Breakaway ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"}
+BIN_DIR=$(swift build -c release --product Breakaway ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} --show-bin-path)
 
 APP=build/Breakaway.app
 rm -rf "$APP"
