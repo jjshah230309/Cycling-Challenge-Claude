@@ -80,6 +80,8 @@ final class WorldRenderer {
             guard visible else { continue }
             node.update(state: state, route: route, frame: frame, dt: fdt, detailed: dist < 90)
             node.setTagVisible(dist > 9 && dist < 55)
+            // Fade riders that sit between the camera and the player so they never block the view.
+            node.opacity = !state.isPlayer && dist < 5.5 ? CGFloat(max(0.15, (dist - 2) / 3.5)) : 1
         }
 
         // Camera.
