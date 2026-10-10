@@ -357,7 +357,7 @@ enum WorldBuilder {
     static func guardrails(route: Route, terrain: TerrainModel, frame: WorldFrame) -> SCNNode {
         var mesh = MeshData()
         let step = 4.0
-        let steel = SIMD4<Float>(0.78, 0.8, 0.82, 1)
+        let steel = SIMD4<Float>(0.62, 0.64, 0.66, 1)
         for side in [-1.0, 1.0] {
             var prev: (top: UInt32, bottom: UInt32)?
             var d = 0.0
@@ -382,7 +382,7 @@ enum WorldBuilder {
         }
         guard mesh.vertexCount > 0 else { return SCNNode() }
         mesh.computeNormals()
-        let m = SceneMath.material(.white, roughness: 0.35, metalness: 0.85)
+        let m = SceneMath.material(NSColor(white: 0.55, alpha: 1), roughness: 0.45, metalness: 0.6)
         m.isDoubleSided = true
         let node = SCNNode(geometry: mesh.geometry(materials: [m]))
         node.name = "guardrails"

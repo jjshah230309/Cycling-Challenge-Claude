@@ -4,6 +4,14 @@ A native macOS indoor-cycling simulator written in Swift. It uses SwiftUI, Scene
 
 Ride the Alpe d'Huez hairpins, the Stelvio, Mont Ventoux, the Zoncolan and the Angliru, plus the Arenberg cobbles, the Poggio and the Worlds circuits in Montréal and Zürich. All of them are traced over **real OpenStreetMap roads** with **real elevation models**, and the surrounding valleys and peaks come from the actual terrain.
 
+![Alpe d'Huez with the in-ride HUD](docs/screenshots/alpe-dhuez.png)
+
+| Stelvio hairpins (helicopter cam) | Trouée d'Arenberg cobbles |
+|---|---|
+| ![Stelvio](docs/screenshots/stelvio-hairpins.png) | ![Arenberg](docs/screenshots/arenberg.png) |
+
+*These screenshots come from the app's headless renderer (`Breakaway --snapshot <dir> [routes]`), which CI runs on every change.*
+
 | | |
 |---|---|
 | **Routes** | 16 real routes: Grand Tour climbs, Monuments & Classics, UCI World Championship circuits. Plus any GPX you import. |
