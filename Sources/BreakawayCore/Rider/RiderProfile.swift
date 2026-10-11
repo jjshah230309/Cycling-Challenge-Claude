@@ -87,11 +87,15 @@ public struct RiderProfile: Codable, Hashable, Sendable {
     public func physicsBody(for bike: BikeSetup? = nil) -> PhysicsBody {
         let b = bike ?? self.bike
         let kitWeight = 1.2 // shoes, helmet, bottles
+        // Wheel inertia: ~65 % of a wheel's mass (rim + tyre) sits near the rim, so
+        // I/r² ≈ 0.5–0.6 × wheel mass, a little more for deep, rim-heavy wheels.
+        let inertiaFactor = 0.5 + 0.001 * b.wheels.rimDepthMM
         return PhysicsBody(mass: weightKg + b.weight + kitWeight,
                            cda: baseCdA * b.frame.cdaFactor + b.wheels.cdaDelta,
                            crrFactorSmooth: b.wheels.crrSmoothFactor,
                            crrFactorRough: b.frame.roughSurfaceFactor * b.wheels.crrRoughFactor,
-                           rotationalMass: 0.55 * b.wheels.weight)
+                           rotationalMass: inertiaFactor * b.wheels.weight,
+                           rimDepth: (b.wheels.rearDisc ? 0.12 : b.wheels.rimDepthMM / 1000))
     }
 
     // MARK: - Progression

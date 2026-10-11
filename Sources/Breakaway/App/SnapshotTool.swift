@@ -40,7 +40,8 @@ enum SnapshotTool {
 
         var profile = RiderProfile(name: "You", weightKg: 70, ftp: 300)
         profile.bike = BikeSetup(frameID: "apex", wheelsID: "deep80")
-        let sim = RideSimulation(route: route, mode: .groupRide, profile: profile, botCount: 14, seed: 7)
+        let sim = RideSimulation(route: route, mode: .groupRide, profile: profile, botCount: 14,
+                                 weather: Weather.preset(.typical, for: route), seed: 7)
         let target: Double
         if let climb = route.climbs.max(by: { $0.elevationGain < $1.elevationGain }) {
             target = climb.startDistance + climb.length * 0.66

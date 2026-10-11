@@ -47,6 +47,7 @@ final class AppModel: ObservableObject {
     @Published var mode: RideMode = .freeRide
     @Published var laps: Int = 1
     @Published var botCount: Int = 14
+    @Published var weatherPreset: Weather.Preset = .typical
     @Published var selectedWorkoutID: String?
     @Published var activeRide: RideController?
     @Published var lastFinishedRide: RideSummary?
@@ -162,7 +163,8 @@ final class AppModel: ObservableObject {
         }
         let sim = RideSimulation(route: route, laps: route.isLoop ? laps : 1, mode: mode, profile: profile,
                                  botCount: mode == .timeTrial ? 0 : botCount, workout: workout,
-                                 personalBests: personalBests, seed: UInt64.random(in: 1...UInt64.max))
+                                 personalBests: personalBests, weather: Weather.preset(weatherPreset, for: route),
+                                 seed: UInt64.random(in: 1...UInt64.max))
         activeRide = RideController(simulation: sim, devices: devices) { [weak self] summary, samples in
             self?.rideEnded(summary: summary, samples: samples)
         }

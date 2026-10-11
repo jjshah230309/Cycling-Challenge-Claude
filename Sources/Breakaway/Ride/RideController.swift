@@ -56,6 +56,12 @@ struct HUDState: Equatable {
     var position = 1
     var riders = 1
     var draft: Double = 0
+    var wPrime: Double = 1
+    var gear = ""
+    /// Wind felt by the rider, m/s: + headwind / − tailwind, and across (+ from the right).
+    var headwind: Double = 0
+    var crosswind: Double = 0
+    var braking = false
     var averagePower: Double = 0
     var climb: ClimbHUD?
     var workout: WorkoutHUD?
@@ -271,6 +277,11 @@ final class RideController: ObservableObject {
         h.position = sim.playerPosition
         h.riders = sim.bots.count + 1
         h.draft = p.draft
+        h.wPrime = p.wPrime
+        h.gear = "\(p.gearFront)×\(p.gearRear)"
+        h.headwind = p.headwind
+        h.crosswind = p.crosswind
+        h.braking = p.isBraking
         h.averagePower = sim.recorder.samples.isEmpty ? 0 : sim.recorder.samples.map(\.power).reduce(0, +) / Double(sim.recorder.samples.count)
         h.surfaceName = sim.route.surfaceSection(at: p.distance)?.name
         h.usingVirtualPower = !devices.hasHardwarePower

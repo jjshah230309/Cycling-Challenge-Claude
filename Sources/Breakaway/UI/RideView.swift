@@ -102,7 +102,9 @@ struct RideHUD: View {
             HStack(spacing: 16) {
                 StatBlock(label: "Avg", value: "\(Int(hud.averagePower))", unit: "W")
                 StatBlock(label: "Draft", value: "\(Int(hud.draft * 100))", unit: "%", color: hud.draft > 0.05 ? Theme.info : .white)
+                StatBlock(label: "Gear", value: hud.gear)
             }
+            wPrimeBar
             if hud.usingVirtualPower {
                 Label("Virtual power · ↑↓ to change", systemImage: "keyboard").font(.caption2).foregroundStyle(.white.opacity(0.65))
             } else if !hud.trainerStatus.isEmpty {
@@ -111,6 +113,43 @@ struct RideHUD: View {
         }
         .padding(14)
         .hudPanel()
+    }
+
+    /// W′ balance: the "matches" left to burn above threshold.
+    private var wPrimeBar: some View {
+        HStack(spacing: 6) {
+            Text("W′").font(.system(size: 10, weight: .bold)).foregroundStyle(.white.opacity(0.6))
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.15))
+                    Capsule().fill(hud.wPrime > 0.5 ? Theme.good : (hud.wPrime > 0.2 ? Color.orange : Color.red))
+                        .frame(width: g.size.width * max(0, min(1, hud.wPrime)))
+                }
+            }
+            .frame(width: 120, height: 6)
+            Text("\(Int((hud.wPrime * 100).rounded()))%").font(.system(size: 10, weight: .semibold)).monospacedDigit()
+                .foregroundStyle(.white.opacity(0.7))
+        }
+    }
+
+    /// Wind relative to the rider: arrow points the way the air hits them.
+    private func windBlock(_ u: UnitSystem) -> some View {
+        let total = (hud.headwind * hud.headwind + hud.crosswind * hud.crosswind).squareRoot()
+        let v = Units.speed(total, u)
+        // 0° = straight in the face (arrow pointing down at the rider), + = from the right.
+        let angle = atan2(hud.crosswind, hud.headwind) * 180 / .pi
+        let label = total < 0.5 ? "Still" : (abs(hud.crosswind) > abs(hud.headwind) ? "Cross" : (hud.headwind > 0 ? "Head" : "Tail"))
+        return VStack(alignment: .leading, spacing: 2) {
+            Text("WIND · \(label.uppercased())").font(.system(size: 10, weight: .bold)).foregroundStyle(.white.opacity(0.6))
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 16, weight: .heavy))
+                    .rotationEffect(.degrees(-angle))
+                    .opacity(total < 0.5 ? 0.3 : 1)
+                Text(String(format: "%.0f", v.value)).font(.system(size: 20, weight: .bold, design: .rounded)).monospacedDigit()
+                Text(v.unit).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+            }
+        }
     }
 
     private func centrePanel(_ u: UnitSystem) -> some View {
@@ -124,6 +163,11 @@ struct RideHUD: View {
             StatBlock(label: "To go", value: String(format: "%.2f", toGo.value), unit: toGo.unit)
             StatBlock(label: "Time", value: Units.clock(hud.elapsed))
             StatBlock(label: "Climbed", value: "\(Int(climbed.value))", unit: climbed.unit)
+            windBlock(u)
+            if hud.braking {
+                Label("BRAKING", systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11, weight: .heavy)).foregroundStyle(.orange)
+            }
             if hud.laps > 1 { StatBlock(label: "Lap", value: "\(hud.lap)/\(hud.laps)") }
             if controller.simulation.mode == .race { StatBlock(label: "Position", value: "\(hud.position)/\(hud.riders)", color: Theme.accent) }
         }

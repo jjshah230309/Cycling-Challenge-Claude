@@ -59,6 +59,19 @@ public struct RiderState: Identifiable, Sendable {
     public var crankAngle: Double = 0
     /// Wheel rotation in radians (for animation).
     public var wheelAngle: Double = 0
+    /// Riding position (drives drag and the 3D pose).
+    public var posture: RiderPosture = .hoods
+    /// True while braking for a bend ahead.
+    public var isBraking = false
+    /// Chainring and sprocket in use.
+    public var gearFront = 50
+    public var gearRear = 17
+    /// W′ balance as a fraction of capacity (1 = fresh, 0 = empty).
+    public var wPrime: Double = 1
+    /// Apparent-wind yaw angle, radians, and the wind components felt (m/s).
+    public var yaw: Double = 0
+    public var headwind: Double = 0
+    public var crosswind: Double = 0
 
     public var wattsPerKg: Double { power / max(weightKg, 30) }
 
@@ -134,6 +147,11 @@ struct BotBrain {
     var attackRemaining: Double = 0
     var laneTarget: Double
     var rng: SplitMix64
+    var cp: Double = 250
+    var wPrime = WPrimeBalance(cp: 250)
+    var drivetrain = Drivetrain.forFrame(.endurance)
+    var postureTime: Double = 0
+    var standPhase: Double = 0
 
     mutating func gaussian() -> Double {
         let u1 = max(rng.nextUnit(), 1e-12), u2 = rng.nextUnit()
@@ -180,6 +198,10 @@ public final class RideSimulation {
 
     /// Trainer difficulty (0–1): fraction of the real gradient the trainer simulates.
     public var trainerDifficulty: Double = 0.5
+    /// Wind, temperature and humidity on the course.
+    public let weather: Weather
+    /// Riders brake for bends they can't take at full speed (descents, hairpins, city corners).
+    public var cornerBraking = true
     public var ergEnabled = true
     /// Personal bests (seconds) keyed by `"<routeID>#<climb name>"`.
     public var personalBests: [String: Double]
@@ -193,10 +215,21 @@ public final class RideSimulation {
     private var lastWorkoutIndex: Int?
     private var playerEnergy = 0.0
     private var lastStandingPosition: Int?
+    private var gust = 1.0
+    private var weatherRNG: SplitMix64
+    private let exposure: Double
+    private var playerDrivetrain: Drivetrain
+    private var playerWPrime: WPrimeBalance
+    private var playerPostureTime: Double = 0
 
     public init(route: Route, laps: Int = 1, mode: RideMode, profile: RiderProfile, botCount: Int = 12,
-                workout: Workout? = nil, personalBests: [String: Double] = [:], seed: UInt64 = 42) {
+                workout: Workout? = nil, personalBests: [String: Double] = [:], weather: Weather = .calm, seed: UInt64 = 42) {
         self.route = route
+        self.weather = weather
+        weatherRNG = SplitMix64(seed: seed &+ 0x5EED)
+        exposure = Weather.exposure(route.record.biome)
+        playerDrivetrain = Drivetrain.forFrame(profile.bike.frame.style)
+        playerWPrime = WPrimeBalance(cp: profile.ftp, capacity: 20_000)
         self.laps = route.isLoop ? max(1, laps) : 1
         self.mode = mode
         self.profile = profile
@@ -206,6 +239,7 @@ public final class RideSimulation {
         player = RiderState(id: "player", name: profile.name, nationCode: profile.nationCode, isPlayer: true, isPacer: false,
                             distance: 0, speed: 0, power: 0, cadence: 0, heartRate: nil, lateral: 0.9, draft: 0,
                             weightKg: profile.weightKg, kit: profile.kit, bike: profile.bike, build: profile.build)
+        player.posture = profile.bike.frame.style == .timeTrial ? .aero : .hoods
         if let workout { self.workout = WorkoutProgress(workout: workout) }
         spawnBots(count: mode == .timeTrial ? 0 : botCount, seed: seed)
     }
@@ -267,15 +301,23 @@ public final class RideSimulation {
                 kit.jerseyAccent = KitColor(hex: 0xFFFFFF)
             }
             let startDistance = route.isLoop ? s.start : max(0, s.start)
-            let state = RiderState(id: "bot-\(i)", name: s.name, nationCode: s.nation, isPlayer: false, isPacer: s.pacer,
+            var state = RiderState(id: "bot-\(i)", name: s.name, nationCode: s.nation, isPlayer: false, isPacer: s.pacer,
                                    distance: startDistance, speed: mode == .race ? 0 : 8, power: 0, cadence: 0, heartRate: nil,
                                    lateral: rng.range(-2.2, 2.2), draft: 0, weightKg: weight, kit: kit, bike: botProfile.bike,
                                    build: [.slim, .regular, .sprinter][i % 3])
+            var brain = BotBrain(targetWkg: s.wkg, variability: s.pacer ? 0.02 : rng.range(0.04, 0.09),
+                                 climbBias: rng.range(-0.5, 1.0), sprintWkg: rng.range(11, 17), isPacer: s.pacer,
+                                 laneTarget: rng.range(-2, 2), rng: SplitMix64(seed: rng.next()))
+            // Critical power ≈ the FTP this rider's target is a fraction of; W′ 14–26 kJ.
+            brain.cp = s.pacer ? s.wkg * weight * 1.25 : s.wkg / intensity * weight
+            brain.wPrime = WPrimeBalance(cp: brain.cp, capacity: rng.range(14_000, 26_000))
+            brain.drivetrain = Drivetrain.forFrame(frame.style)
+            brain.standPhase = rng.range(0, 60)
+            state.gearFront = brain.drivetrain.frontTeeth
+            state.gearRear = brain.drivetrain.rearTeeth
             bots.append(state)
             botBodies.append(botProfile.physicsBody())
-            brains.append(BotBrain(targetWkg: s.wkg, variability: s.pacer ? 0.02 : rng.range(0.04, 0.09),
-                                   climbBias: rng.range(-0.5, 1.0), sprintWkg: rng.range(11, 17), isPacer: s.pacer,
-                                   laneTarget: rng.range(-2, 2), rng: SplitMix64(seed: rng.next())))
+            brains.append(brain)
         }
     }
 
@@ -314,10 +356,13 @@ public final class RideSimulation {
         }
         let g = sample.grade * 100
         let effective = g >= 0 ? g * trainerDifficulty : g * trainerDifficulty * 0.5
-        // Smart trainers model the rider's CdA themselves; hand them a realistic wind-resistance coefficient.
-        let cw = 0.5 * CyclingPhysics.airDensity(altitude: sample.elevation) * playerBody.cda
-        return .simulation(gradePercent: (effective * 10).rounded() / 10, crr: playerBody.crr(on: sample.surface),
-                           windSpeed: 0, windResistance: cw)
+        // Smart trainers compute air drag as ½·cw·(v + wind)²: hand them the rider's real drag
+        // coefficient for the current position, yaw and shelter, and the headwind being felt.
+        let p = player
+        let cw = 0.5 * weather.airDensity(at: sample.elevation) * playerBody.cda(yaw: p.yaw, posture: p.posture) * (1 - p.draft)
+        let crr = CyclingPhysics.rollingCoefficient(speed: p.speed, body: playerBody, surface: sample.surface)
+        return .simulation(gradePercent: (effective * 10).rounded() / 10, crr: (crr * 10_000).rounded() / 10_000,
+                           windSpeed: (p.headwind * 1000).rounded() / 1000, windResistance: (cw * 100).rounded() / 100)
     }
 
     // MARK: - Simulation step
@@ -342,6 +387,17 @@ public final class RideSimulation {
             workout = w
         }
 
+        // --- Wind gusts (Ornstein–Uhlenbeck around the mean, ~8 s correlation) ---
+        if weather.windSpeed > 0 {
+            let tau = 8.0
+            let u1 = max(weatherRNG.nextUnit(), 1e-12), u2 = weatherRNG.nextUnit()
+            let n = sqrt(-2 * log(u1)) * cos(2 * .pi * u2)
+            gust += -(gust - 1) / tau * dt + weather.gustiness * sqrt(2 * dt / tau) * n
+            gust = max(0.2, min(2.2, gust))
+        }
+        updateWind(&player)
+        for i in bots.indices { updateWind(&bots[i]) }
+
         // --- Drafting (computed from positions at the start of the step) ---
         let everyone = [player] + bots
         let drafts = everyone.map { rider -> Double in
@@ -351,13 +407,37 @@ public final class RideSimulation {
 
         // --- Player ---
         let s = route.sample(at: player.distance)
-        let rho = CyclingPhysics.airDensity(altitude: s.elevation)
         player.power = max(0, input.power)
-        player.cadence = input.cadence
         player.heartRate = input.heartRate
         player.draft = drafts[0]
-        player.speed = CyclingPhysics.step(speed: player.speed, power: player.power, grade: s.grade, dt: dt, body: playerBody,
-                                           surface: s.surface, airDensity: rho, draft: player.draft)
+        playerWPrime.cp = profile.ftp
+        playerWPrime.update(power: player.power, dt: dt)
+        player.wPrime = playerWPrime.fraction
+        playerPostureTime += dt
+        let playerPosture = RideSimulation.choosePosture(current: player.posture, held: playerPostureTime, speed: player.speed,
+                                                         power: player.power, ftp: profile.ftp, grade: s.grade,
+                                                         braking: player.isBraking, timeTrialBike: profile.bike.frame.style == .timeTrial,
+                                                         clock: elapsed)
+        if playerPosture != player.posture {
+            player.posture = playerPosture
+            playerPostureTime = 0
+        }
+        let playerConditions = RideConditions(grade: s.grade, surface: s.surface, airDensity: weather.airDensity(at: s.elevation),
+                                              headwind: player.headwind, crosswind: player.crosswind, draft: player.draft,
+                                              posture: player.posture, drivetrainEfficiency: playerDrivetrain.efficiency)
+        let playerStep = CyclingPhysics.step(speed: player.speed, power: player.power, dt: dt, body: playerBody,
+                                             conditions: playerConditions, speedLimit: speedLimit(at: player.distance))
+        player.speed = playerStep.speed
+        player.isBraking = playerStep.braking
+        // Cadence from the sensor when there is one; otherwise from the virtual gear.
+        playerDrivetrain.shift(speed: player.speed, target: input.cadence > 0 ? input.cadence : 88)
+        if input.cadence > 0 {
+            player.cadence = input.cadence
+        } else {
+            player.cadence = player.power > 10 ? min(130, playerDrivetrain.cadence(speed: player.speed)) : 0
+        }
+        player.gearFront = playerDrivetrain.frontTeeth
+        player.gearRear = playerDrivetrain.rearTeeth
         let before = player.distance
         player.distance += player.speed * dt
         advanceAnimation(&player, dt: dt)
@@ -386,48 +466,118 @@ public final class RideSimulation {
         }
     }
 
+    private func speedLimit(at distance: Double) -> Double {
+        cornerBraking ? route.safeSpeed(at: distance) : .infinity
+    }
+
+    /// Wind felt at rider height along and across the road at the rider's position.
+    private func updateWind(_ r: inout RiderState) {
+        guard weather.windSpeed > 0 else {
+            r.headwind = 0
+            r.crosswind = 0
+            r.yaw = 0
+            return
+        }
+        let w = weather.components(direction: route.direction(at: r.distance), exposure: exposure, gust: gust)
+        r.headwind = w.head
+        r.crosswind = w.cross
+        r.yaw = CyclingPhysics.yaw(speed: r.speed, headwind: w.head, crosswind: w.cross)
+    }
+
+    /// Picks the riding position a real rider would use. Positions are held for at
+    /// least ~1.5 s so riders don't flicker between them.
+    static func choosePosture(current: RiderPosture, held: Double, speed: Double, power: Double, ftp: Double,
+                              grade: Double, braking: Bool, timeTrialBike: Bool, clock: Double) -> RiderPosture {
+        let ftp = max(ftp, 80)
+        let desired: RiderPosture
+        // Out of the saddle on steep ramps, in rhythm: ~12 s of every 45 s.
+        let standWindow = (clock.truncatingRemainder(dividingBy: 45)) < 12
+        if power > 1.6 * ftp && speed < 19 {
+            desired = .standing                                     // attack or sprint
+        } else if grade > 0.075 && power > 0.75 * ftp && standWindow && speed < 7 {
+            desired = .standing
+        } else if grade < -0.03 && speed > 12 && power < 0.35 * ftp && !braking {
+            desired = .tuck
+        } else if timeTrialBike {
+            desired = grade > 0.05 || braking ? .hoods : .aero
+        } else if braking || (speed > 11 && power > 0.6 * ftp && grade < 0.03) {
+            desired = .drops
+        } else {
+            desired = .hoods
+        }
+        if desired == current { return current }
+        // Sprints and braking can't wait; other changes are held a moment.
+        if desired == .standing && power > 1.6 * ftp { return desired }
+        if braking && current == .tuck { return desired }
+        return held > 1.5 ? desired : current
+    }
+
     private func advanceAnimation(_ r: inout RiderState, dt: Double) {
         r.crankAngle = (r.crankAngle + r.cadence / 60 * 2 * .pi * dt).truncatingRemainder(dividingBy: 2 * .pi)
         r.wheelAngle = (r.wheelAngle + r.speed / 0.336 * dt).truncatingRemainder(dividingBy: 2 * .pi)
     }
 
+    /// Lateral position of the centre of the wake of a rider `gap` metres ahead. In a
+    /// crosswind from the right (+) the wake is carried to the left (−), and vice versa.
+    private func wakeCentre(of other: RiderState, gap: Double, for rider: RiderState) -> Double {
+        let drift = Drafting.wakeOffset(gap: gap, yaw: rider.yaw)
+        return other.lateral - (rider.crosswind >= 0 ? 1 : -1) * drift
+    }
+
     private func draftFor(_ rider: RiderState, among all: [RiderState]) -> Double {
-        var nearestGap = Double.infinity, nearestLateral = 0.0, ahead = 0
+        var best = 0.0, ahead = 0, leader = 0.0
+        for other in all where other.id != rider.id && other.finishTime == nil {
+            let gap = other.distance - rider.distance
+            if gap < -0.2, gap > -3 {
+                leader = max(leader, Drafting.leaderBenefit(gapBehind: -gap, lateral: other.lateral - rider.lateral))
+            }
+            guard gap > 0.2, gap < 14 else { continue }
+            ahead += 1
+        }
+        guard ahead > 0 else { return leader }
         for other in all where other.id != rider.id && other.finishTime == nil {
             let gap = other.distance - rider.distance
             guard gap > 0.2, gap < 14 else { continue }
-            ahead += 1
-            if gap < nearestGap {
-                nearestGap = gap
-                nearestLateral = other.lateral - rider.lateral
-            }
+            let offset = rider.lateral - wakeCentre(of: other, gap: gap, for: rider)
+            best = max(best, Drafting.reduction(gap: gap, lateral: offset, ridersAhead: ahead))
         }
-        guard ahead > 0 else { return 0 }
-        return Drafting.reduction(gap: nearestGap, lateral: nearestLateral, ridersAhead: ahead)
+        return min(0.6, best + leader)
     }
 
-    /// Riders drift onto the wheel in front when close enough to draft, otherwise hold a lane.
+    /// Riders drift into the wake of the wheel in front when close enough to draft (the
+    /// downwind side in a crosswind, so echelons form), pass slower riders blocking
+    /// their line, and otherwise hold a lane.
     private func laneFor(_ rider: RiderState, among all: [RiderState]) -> Double {
         var best: RiderState?
-        for other in all where other.id != rider.id {
+        for other in all where other.id != rider.id && other.finishTime == nil {
             let gap = other.distance - rider.distance
             if gap > 0.8, gap < 18, best.map({ gap < $0.distance - rider.distance }) ?? true {
                 best = other
             }
         }
-        var target = best?.lateral ?? (rider.isPlayer ? 0.9 : rider.lateral)
+        var target = rider.isPlayer ? 0.9 : rider.lateral
+        if let b = best {
+            let gap = b.distance - rider.distance
+            target = wakeCentre(of: b, gap: gap, for: rider)
+            // Coming up fast on a wheel: swing out and go round it.
+            if gap < 4, rider.speed > b.speed + 0.4 {
+                let side: Double = b.lateral > 0.3 ? -1 : 1
+                target = b.lateral + side * 1.0
+            }
+        }
         // Don't ride through anyone alongside.
         for other in all where other.id != rider.id && abs(other.distance - rider.distance) < 1.8 {
             if abs(other.lateral - target) < 0.75 {
                 target = other.lateral + (target >= other.lateral ? 0.8 : -0.8)
             }
         }
-        return max(-2.6, min(2.6, target))
+        return max(-2.7, min(2.7, target))
     }
 
     private func stepBot(_ i: Int, dt: Double, draft: Double, everyone: [RiderState]) {
         var bot = bots[i]
         guard bot.finishTime == nil else {
+            bot.posture = .hoods
             bot.speed = max(0, bot.speed - 2 * dt)
             bot.power = 0
             bot.cadence = 0
@@ -453,7 +603,9 @@ public final class RideSimulation {
                 if brain.attackRemaining > 0 {
                     brain.attackRemaining -= dt
                     power *= 1.35
-                } else if s.grade > 0.04, brain.rng.nextUnit() < dt / 240 {
+                    // Out of matches: the attack fizzles.
+                    if brain.wPrime.fraction < 0.25 { brain.attackRemaining = 0 }
+                } else if s.grade > 0.04, brain.wPrime.fraction > 0.6, brain.rng.nextUnit() < dt / 240 {
                     brain.attackRemaining = brain.rng.range(15, 40)
                 }
                 let toGo = totalDistance - bot.distance
@@ -467,15 +619,46 @@ public final class RideSimulation {
                 if gapToPlayer < -20, gapToPlayer > -120 { power *= 1.05 }
             }
         }
+        // An empty W′ tank forces a rider back below critical power until it refills.
+        if brain.wPrime.fraction < 0.08 { power = min(power, 0.93 * brain.cp) }
         if mode == .race, elapsed < 3 { power = 0 } // neutral start countdown
+        // No point pedalling into a corner they are braking for.
+        let limit = speedLimit(at: bot.distance)
+        if bot.speed > limit - 0.3 { power *= 0.2 }
 
-        let rho = CyclingPhysics.airDensity(altitude: s.elevation)
         bot.power = max(0, power)
         bot.draft = draft
-        bot.speed = CyclingPhysics.step(speed: bot.speed, power: bot.power, grade: s.grade, dt: dt, body: body,
-                                        surface: s.surface, airDensity: rho, draft: draft)
+        brain.wPrime.update(power: bot.power, dt: dt)
+        bot.wPrime = brain.wPrime.fraction
+        brain.postureTime += dt
+        let posture = RideSimulation.choosePosture(current: bot.posture, held: brain.postureTime, speed: bot.speed, power: bot.power,
+                                                   ftp: brain.cp, grade: s.grade, braking: bot.isBraking,
+                                                   timeTrialBike: bot.bike.frame.style == .timeTrial, clock: elapsed + brain.standPhase)
+        if posture != bot.posture {
+            bot.posture = posture
+            brain.postureTime = 0
+        }
+        let conditions = RideConditions(grade: s.grade, surface: s.surface, airDensity: weather.airDensity(at: s.elevation),
+                                        headwind: bot.headwind, crosswind: bot.crosswind, draft: draft, posture: bot.posture,
+                                        drivetrainEfficiency: brain.drivetrain.efficiency)
+        let result = CyclingPhysics.step(speed: bot.speed, power: bot.power, dt: dt, body: body, conditions: conditions, speedLimit: limit)
+        bot.speed = result.speed
+        bot.isBraking = result.braking
+        // Riders can't ride through each other: a rider boxed in right behind a slower
+        // wheel has to ease off until there's room to pass.
+        for other in everyone where other.id != bot.id && other.finishTime == nil {
+            let gap = other.distance - bot.distance
+            if gap > 0, gap < 2.1, abs(other.lateral - bot.lateral) < 0.6 {
+                bot.speed = min(bot.speed, other.speed + max(0, gap - 1.75) * 2)
+            }
+        }
         bot.distance += bot.speed * dt
-        bot.cadence = bot.power < 15 ? 0 : max(65, min(105, 88 - s.grade * 120 + brain.noise * 6))
+        // Cadence from the gear: spin on the flat, grind a little on climbs, stomp when standing.
+        let targetCadence = bot.posture == .standing ? 72 : (s.grade > 0.05 ? 80 : 91) + brain.noise * 4
+        brain.drivetrain.shift(speed: bot.speed, target: targetCadence)
+        bot.gearFront = brain.drivetrain.frontTeeth
+        bot.gearRear = brain.drivetrain.rearTeeth
+        bot.cadence = bot.power < 15 || bot.isBraking ? 0 : max(40, min(125, brain.drivetrain.cadence(speed: bot.speed)))
         advanceAnimation(&bot, dt: dt)
         brain.laneTarget = laneFor(bot, among: everyone)
         bot.lateral += (brain.laneTarget - bot.lateral) * min(1, dt * 0.5)

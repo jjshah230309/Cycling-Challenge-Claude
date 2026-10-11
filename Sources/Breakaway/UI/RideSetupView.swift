@@ -76,6 +76,15 @@ struct RideSetupView: View {
                             .frame(width: 200)
                     }
                 }
+                VStack(alignment: .leading) {
+                    Text("Weather").font(.caption).foregroundStyle(Theme.secondaryText)
+                    Picker("Weather", selection: $model.weatherPreset) {
+                        ForEach(Weather.Preset.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 280)
+                }
                 if model.mode == .workout {
                     Picker("Workout", selection: Binding(get: { model.selectedWorkoutID ?? "sweetspot-3x12" }, set: { model.selectedWorkoutID = $0 })) {
                         ForEach(model.allWorkouts) { w in

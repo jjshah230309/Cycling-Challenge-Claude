@@ -4,12 +4,23 @@ import Foundation
 public enum Surface: String, Codable, CaseIterable, Sendable {
     case asphalt, cobbles, gravel
 
-    /// Coefficient of rolling resistance for a good 28 mm road tyre.
+    /// Static coefficient of rolling resistance for a good 28 mm road tyre
+    /// (the speed-dependent part is added by `vibrationLoss`).
     public var baseCrr: Double {
         switch self {
-        case .asphalt: return 0.0040
-        case .gravel: return 0.0080
-        case .cobbles: return 0.0120
+        case .asphalt: return 0.0037
+        case .gravel: return 0.0060
+        case .cobbles: return 0.0085
+        }
+    }
+
+    /// Fractional increase in rolling resistance per m/s of speed: tyre hysteresis on
+    /// tarmac, and energy lost shaking bike and rider on rough surfaces.
+    public var vibrationLoss: Double {
+        switch self {
+        case .asphalt: return 0.010
+        case .gravel: return 0.05
+        case .cobbles: return 0.065
         }
     }
 

@@ -96,6 +96,75 @@ public final class Route: Identifiable, @unchecked Sendable {
         return t
     }
 
+    private let corneringLock = NSLock()
+    private var corneringStorage: (step: Double, curvature: [Double], limit: [Double])?
+
+    /// Curvature (1/m) and the braking-aware safe-speed envelope, sampled every 5 m.
+    private var cornering: (step: Double, curvature: [Double], limit: [Double]) {
+        corneringLock.lock()
+        defer { corneringLock.unlock() }
+        if let c = corneringStorage { return c }
+        let step = 5.0
+        let n = Int(length / step) + 2
+        var kappa = [Double](repeating: 0, count: n)
+        var limit = [Double](repeating: 0, count: n)
+        for i in 0..<n {
+            let d = min(Double(i) * step, length)
+            kappa[i] = rawCurvature(at: d)
+            let radius = abs(kappa[i]) > 1e-5 ? 1 / abs(kappa[i]) : 1e5
+            limit[i] = min(40, Cornering.cornerSpeed(radius: max(radius, 6), surface: surface(at: d)))
+        }
+        // Backward pass: arrive at every corner no faster than its limit, braking at a
+        // comfortable rate (v² = v_corner² + 2·a·s). Circuits wrap, so run it twice.
+        for _ in 0..<(isLoop ? 2 : 1) {
+            for i in stride(from: n - 1, through: 0, by: -1) {
+                let next: Double
+                if i + 1 < n {
+                    next = limit[i + 1]
+                } else if isLoop {
+                    next = limit[1]
+                } else {
+                    continue
+                }
+                let a = Cornering.plannedBraking(on: surface(at: Double(i) * step))
+                limit[i] = min(limit[i], (next * next + 2 * a * step).squareRoot())
+            }
+        }
+        let c = (step, kappa, limit)
+        corneringStorage = c
+        return c
+    }
+
+    /// Signed path curvature from the heading change over ±12 m (positive = left turn).
+    /// The wide window approximates the line a rider actually takes through a bend.
+    private func rawCurvature(at distance: Double) -> Double {
+        let h = 12.0
+        let a = direction(at: distance - h), b = direction(at: distance + h)
+        let turn = atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y)
+        return turn / (2 * h)
+    }
+
+    private func cornerLookup(_ table: [Double], _ step: Double, _ distance: Double) -> Double {
+        let d = normalize(distance) / step
+        let i = min(Int(d), table.count - 2)
+        let t = d - Double(i)
+        return table[i] + (table[i + 1] - table[i]) * t
+    }
+
+    /// Signed curvature of the riding line, 1/m (positive = turning left).
+    public func curvature(at distance: Double) -> Double {
+        let c = cornering
+        return cornerLookup(c.curvature, c.step, distance)
+    }
+
+    /// The fastest a rider can be going here and still make every bend ahead
+    /// (cornering grip plus braking distance), m/s.
+    public func safeSpeed(at distance: Double) -> Double {
+        let c = cornering
+        if !isLoop && distance >= length { return 40 }
+        return cornerLookup(c.limit, c.step, distance)
+    }
+
     public init(record: RouteRecord) {
         self.record = record
         var decoded = PolylineCodec.decode3(record.encodedTrack)

@@ -183,4 +183,100 @@ final class RouteAndSimulationTests: XCTestCase {
         XCTAssertEqual(sim.lapTimes.count, 2)
         XCTAssertEqual(sim.player.distance, route.length * 2, accuracy: 1)
     }
+
+    // MARK: - Realistic riding
+
+    /// Hairpins and city corners impose a safe-speed envelope, and riders brake for them.
+    func testRidersBrakeForBendsOnDescents() throws {
+        let route = try XCTUnwrap(RouteCatalog.route(id: "sanremo-finale"))
+        XCTAssertLessThan((0..<Int(route.length / 10)).map { route.safeSpeed(at: Double($0) * 10) }.min()!, 9)
+        let sim = RideSimulation(route: route, mode: .timeTrial, profile: RiderProfile(weightKg: 70, ftp: 300), botCount: 0)
+        var braking = 0.0, overshoot = 0.0
+        while !sim.isFinished {
+            sim.step(dt: 0.1, input: PlayerInput(power: 280, cadence: 90))
+            if sim.player.isBraking { braking += 0.1 }
+            overshoot = max(overshoot, sim.player.speed - route.safeSpeed(at: sim.player.distance))
+        }
+        XCTAssertGreaterThan(braking, 15)
+        XCTAssertLessThan(overshoot, 1.0)
+        // Without corner braking the same ride is faster (and unrealistic).
+        let reckless = RideSimulation(route: route, mode: .timeTrial, profile: RiderProfile(weightKg: 70, ftp: 300), botCount: 0)
+        reckless.cornerBraking = false
+        while !reckless.isFinished { reckless.step(dt: 0.1, input: PlayerInput(power: 280, cadence: 90)) }
+        XCTAssertLessThan(reckless.elapsed, sim.elapsed - 10)
+    }
+
+    func testCurvatureSignAndHairpins() throws {
+        let stelvio = try XCTUnwrap(RouteCatalog.route(id: "stelvio"))
+        let radii = stride(from: 0.0, to: stelvio.length, by: 5).map { 1 / max(abs(stelvio.curvature(at: $0)), 1e-6) }
+        // The famous stacked hairpins: dozens of bends tighter than 15 m.
+        var hairpins = 0, inBend = false
+        for r in radii {
+            if r < 15, !inBend { hairpins += 1 }
+            inBend = r < 15
+        }
+        XCTAssertGreaterThan(hairpins, 25)
+    }
+
+    func testCrosswindFormsEchelons() throws {
+        let route = try XCTUnwrap(RouteCatalog.route(id: "roubaix-finale"))
+        let weather = Weather(windSpeed: 9, windFromDegrees: Weather.preset(.windy, for: route).windFromDegrees)
+        let sim = RideSimulation(route: route, mode: .groupRide, profile: RiderProfile(weightKg: 70, ftp: 280), botCount: 20, weather: weather)
+        var downwind = 0.0, n = 0.0
+        for _ in 0..<(15 * 60 * 10) {
+            sim.step(dt: 0.1, input: PlayerInput(power: 250, cadence: 90))
+            for b in sim.bots where abs(b.crosswind) > 1.5 && b.draft > 0.05 {
+                downwind += b.lateral * (b.crosswind >= 0 ? -1 : 1)
+                n += 1
+            }
+        }
+        XCTAssertGreaterThan(n, 100)
+        XCTAssertGreaterThan(downwind / n, 0.3, "sheltering riders should sit on the downwind side")
+    }
+
+    func testWindyDayChangesTheRide() throws {
+        let route = try XCTUnwrap(RouteCatalog.route(id: "arenberg"))
+        func time(_ w: Weather) -> Double {
+            let sim = RideSimulation(route: route, mode: .timeTrial, profile: RiderProfile(weightKg: 70, ftp: 300), botCount: 0, weather: w)
+            while !sim.isFinished { sim.step(dt: 0.1, input: PlayerInput(power: 280, cadence: 90)) }
+            return sim.elapsed
+        }
+        let calm = time(.calm)
+        // The race heads north-west through the Trouée d'Arenberg: a north-westerly is a headwind.
+        let head = time(Weather(windSpeed: 8, windFromDegrees: 315, gustiness: 0))
+        let tail = time(Weather(windSpeed: 8, windFromDegrees: 135, gustiness: 0))
+        XCTAssertGreaterThan(head, calm + 15)
+        XCTAssertLessThan(tail, calm - 10)
+    }
+
+    func testPostureAndGearsFollowTheTerrain() throws {
+        let route = try XCTUnwrap(RouteCatalog.route(id: "zoncolan"))
+        let sim = RideSimulation(route: route, mode: .freeRide, profile: RiderProfile(weightKg: 70, ftp: 280), botCount: 4)
+        var standing = 0, samples = 0
+        for _ in 0..<(15 * 60 * 10) {
+            sim.step(dt: 0.1, input: PlayerInput(power: 300, cadence: 0))
+            samples += 1
+            if sim.player.posture == .standing { standing += 1 }
+        }
+        XCTAssertGreaterThan(Double(standing) / Double(samples), 0.1)
+        XCTAssertEqual(sim.player.gearFront, 36, "small ring on the Zoncolan")
+        XCTAssertGreaterThan(sim.player.gearRear, 21)
+        XCTAssertLessThan(sim.player.wPrime, 1)
+        for b in sim.bots where b.power > 50 {
+            XCTAssertGreaterThan(b.cadence, 35)
+            XCTAssertLessThan(b.cadence, 110)
+        }
+    }
+
+    func testTrainerGetsRealWindResistance() throws {
+        let route = try XCTUnwrap(RouteCatalog.route(id: "roubaix-finale"))
+        let sim = RideSimulation(route: route, mode: .freeRide, profile: RiderProfile(weightKg: 70, ftp: 280), botCount: 0,
+                                 weather: Weather(windSpeed: 6, windFromDegrees: 250, gustiness: 0))
+        for _ in 0..<600 { sim.step(dt: 0.1, input: PlayerInput(power: 250, cadence: 90)) }
+        guard case let .simulation(_, crr, wind, cw) = sim.trainerTarget else { return XCTFail("expected SIM mode") }
+        XCTAssertEqual(wind, sim.player.headwind, accuracy: 0.001)
+        XCTAssertNotEqual(wind, 0)
+        XCTAssertEqual(cw, 0.19, accuracy: 0.05)
+        XCTAssertGreaterThan(crr, 0.0035)
+    }
 }
