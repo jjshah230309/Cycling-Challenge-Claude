@@ -51,16 +51,17 @@ enum WorldBuilder {
         root.addChildNode(corridorTerrain(route: route, terrain: terrain, frame: frame))
         progress(0.55, "Road surface")
         root.addChildNode(road(route: route, terrain: terrain, frame: frame))
-        root.addChildNode(guardrails(route: route, terrain: terrain, frame: frame))
+        root.addChildNode(SceneryBuilder.roadside(route: route, terrain: terrain, frame: frame))
         if let w = terrain.waterLevel {
             root.addChildNode(water(level: w, terrain: terrain, frame: frame))
         }
         progress(0.68, "Forests & villages")
         var rng = SceneRandom(seed: UInt64(StableHash.hex(route.id), radix: 16) ?? 7)
-        root.addChildNode(vegetation(route: route, terrain: terrain, frame: frame, rng: &rng))
-        root.addChildNode(buildings(route: route, terrain: terrain, frame: frame, rng: &rng))
+        root.addChildNode(SceneryBuilder.vegetation(route: route, terrain: terrain, frame: frame, rng: &rng))
+        root.addChildNode(SceneryBuilder.grass(route: route, terrain: terrain, frame: frame, rng: &rng))
+        root.addChildNode(SceneryBuilder.buildings(route: route, terrain: terrain, frame: frame, rng: &rng))
         progress(0.85, "Crowds & signage")
-        root.addChildNode(crowds(route: route, terrain: terrain, frame: frame, rng: &rng))
+        root.addChildNode(SceneryBuilder.crowds(route: route, terrain: terrain, frame: frame, rng: &rng))
         root.addChildNode(signage(route: route, frame: frame))
 
         let riders = SCNNode()
@@ -93,13 +94,14 @@ enum WorldBuilder {
         light.castsShadow = true
         light.shadowMode = .forward
         light.shadowSampleCount = 8
-        light.shadowRadius = 2.5
-        light.shadowMapSize = CGSize(width: 2048, height: 2048)
-        light.orthographicScale = 45
-        light.zNear = 1
-        light.zFar = 600
+        light.shadowRadius = 2.0
+        light.shadowMapSize = CGSize(width: 4096, height: 4096)
+        // Cascaded shadow maps: crisp under the riders, still present on trees and houses far up the road.
+        light.shadowCascadeCount = 4
+        light.shadowCascadeSplittingFactor = 0.35
+        light.maximumShadowDistance = 600
+        light.automaticallyAdjustsShadowProjection = true
         light.shadowColor = NSColor(white: 0, alpha: 0.55)
-        light.automaticallyAdjustsShadowProjection = false
         let node = SCNNode()
         node.name = "sun"
         node.light = light
@@ -157,6 +159,7 @@ enum WorldBuilder {
     }
 
     private static let groundDetail = ProceduralTextures.groundDetail()
+    private static let groundNormal = ProceduralTextures.normalMap(size: 256, scale: 8, strength: 2.5, seed: 4)
 
     static func terrainMaterial() -> SCNMaterial {
         let m = SCNMaterial()
@@ -166,6 +169,13 @@ enum WorldBuilder {
         m.diffuse.wrapT = .repeat
         m.diffuse.mipFilter = .linear
         m.diffuse.maxAnisotropy = 8
+        // Fine relief (clods, ruts, grass clumps) lit by the sun.
+        m.normal.contents = groundNormal
+        m.normal.wrapS = .repeat
+        m.normal.wrapT = .repeat
+        m.normal.mipFilter = .linear
+        m.normal.intensity = 0.7
+        m.normal.contentsTransform = SCNMatrix4MakeScale(3, 3, 1)
         m.isDoubleSided = true
         return m
     }
@@ -354,49 +364,20 @@ enum WorldBuilder {
         return node
     }
 
-    static func guardrails(route: Route, terrain: TerrainModel, frame: WorldFrame) -> SCNNode {
-        var mesh = MeshData()
-        let step = 4.0
-        let steel = SIMD4<Float>(0.62, 0.64, 0.66, 1)
-        for side in [-1.0, 1.0] {
-            var prev: (top: UInt32, bottom: UInt32)?
-            var d = 0.0
-            while d <= route.length {
-                let p = route.position(at: d)
-                let dir = route.direction(at: d)
-                let right = LocalPoint(x: dir.y, y: -dir.x)
-                let e = route.elevation(at: d)
-                let probe = p + right * (side * 14)
-                let drop = e - terrain.height(x: probe.x, y: probe.y)
-                if drop > 3.5, route.record.biome == .alpine || route.record.biome == .coastal || route.record.biome == .lakes {
-                    let q = p + right * (side * 5.9)
-                    let bottom = mesh.addVertex(frame.point(q, e + 0.35), normal: SIMD3(0, 0, 1), color: steel, uv: SIMD2(0, Float(d)))
-                    let top = mesh.addVertex(frame.point(q, e + 0.85), normal: SIMD3(0, 0, 1), color: steel, uv: SIMD2(1, Float(d)))
-                    if let prev { mesh.addQuad(prev.bottom, bottom, top, prev.top) }
-                    prev = (top, bottom)
-                } else {
-                    prev = nil
-                }
-                d += step
-            }
-        }
-        guard mesh.vertexCount > 0 else { return SCNNode() }
-        mesh.computeNormals()
-        let m = SceneMath.material(NSColor(white: 0.55, alpha: 1), roughness: 0.45, metalness: 0.6)
-        m.isDoubleSided = true
-        let node = SCNNode(geometry: mesh.geometry(materials: [m]))
-        node.name = "guardrails"
-        return node
-    }
-
     static func water(level: Double, terrain: TerrainModel, frame: WorldFrame) -> SCNNode {
         let plane = SCNPlane(width: CGFloat(terrain.width * 1.4), height: CGFloat(terrain.depth * 1.4))
         let m = SCNMaterial()
         m.lightingModel = .physicallyBased
-        m.diffuse.contents = NSColor(srgbRed: 0.10, green: 0.33, blue: 0.48, alpha: 1)
-        m.roughness.contents = 0.08
-        m.metalness.contents = 0.25
-        m.transparency = 0.92
+        m.diffuse.contents = NSColor(srgbRed: 0.07, green: 0.27, blue: 0.40, alpha: 1)
+        m.roughness.contents = 0.06
+        m.metalness.contents = 0.35
+        m.transparency = 0.94
+        // Ripples: a tiling normal map scrolled by the renderer every frame.
+        m.normal.contents = ProceduralTextures.normalMap(size: 256, scale: 6, strength: 1.4, seed: 11)
+        m.normal.wrapS = .repeat
+        m.normal.wrapT = .repeat
+        m.normal.intensity = 0.55
+        m.normal.contentsTransform = SCNMatrix4MakeScale(CGFloat(terrain.width * 1.4 / 18), CGFloat(terrain.depth * 1.4 / 18), 1)
         plane.materials = [m]
         let node = SCNNode(geometry: plane)
         node.simdEulerAngles = SIMD3(-.pi / 2, 0, 0)
@@ -405,344 +386,6 @@ enum WorldBuilder {
         node.name = "water"
         node.castsShadow = false
         return node
-    }
-
-    // MARK: - Vegetation
-
-    enum TreeKind: CaseIterable { case conifer, deciduous, poplar, palm, olive }
-
-    static func treePrototype(_ kind: TreeKind) -> SCNNode {
-        let node = SCNNode()
-        let bark = SceneMath.material(NSColor(srgbRed: 0.36, green: 0.27, blue: 0.19, alpha: 1), roughness: 0.9, lit: .lambert)
-        func leaves(_ hex: UInt32) -> SCNMaterial {
-            SceneMath.material(NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
-                                       blue: CGFloat(hex & 0xFF) / 255, alpha: 1), roughness: 0.9, lit: .lambert)
-        }
-        switch kind {
-        case .conifer:
-            let trunk = SCNCylinder(radius: 0.25, height: 3)
-            trunk.radialSegmentCount = 6
-            trunk.materials = [bark]
-            let t = SCNNode(geometry: trunk)
-            t.simdPosition = SIMD3(0, 1.5, 0)
-            node.addChildNode(t)
-            for (i, (r, h, y)) in [(2.6, 6.0, 4.6), (2.0, 5.0, 7.4), (1.3, 4.0, 9.8)].enumerated() {
-                let cone = SCNCone(topRadius: 0, bottomRadius: CGFloat(r), height: CGFloat(h))
-                cone.radialSegmentCount = 7
-                cone.materials = [leaves(i == 0 ? 0x24452A : 0x2B5232)]
-                let c = SCNNode(geometry: cone)
-                c.simdPosition = SIMD3(0, Float(y), 0)
-                node.addChildNode(c)
-            }
-        case .deciduous, .olive:
-            let olive = kind == .olive
-            let trunk = SCNCylinder(radius: olive ? 0.3 : 0.28, height: olive ? 2.2 : 3.5)
-            trunk.radialSegmentCount = 6
-            trunk.materials = [bark]
-            let t = SCNNode(geometry: trunk)
-            t.simdPosition = SIMD3(0, olive ? 1.1 : 1.75, 0)
-            node.addChildNode(t)
-            for k in 0..<3 {
-                let s = SCNSphere(radius: olive ? 1.6 : 2.6 - CGFloat(k) * 0.3)
-                s.segmentCount = 8
-                let greens: [UInt32] = [0x3E6B2A, 0x4A7A30, 0x55813A]
-                s.materials = [leaves(olive ? 0x7E8C5A : greens[k])]
-                let n = SCNNode(geometry: s)
-                n.simdPosition = SIMD3(Float(k == 1 ? 1.0 : (k == 2 ? -0.9 : 0)), olive ? 3.0 : 5.0 + Float(k) * 0.6, Float(k == 2 ? 0.7 : 0))
-                n.simdScale = SIMD3(1, olive ? 0.7 : 0.9, 1)
-                node.addChildNode(n)
-            }
-        case .poplar:
-            let trunk = SCNCylinder(radius: 0.2, height: 2)
-            trunk.materials = [bark]
-            let t = SCNNode(geometry: trunk)
-            t.simdPosition = SIMD3(0, 1, 0)
-            node.addChildNode(t)
-            let s = SCNSphere(radius: 1.6)
-            s.segmentCount = 8
-            s.materials = [leaves(0x3F6E2C)]
-            let n = SCNNode(geometry: s)
-            n.simdPosition = SIMD3(0, 7, 0)
-            n.simdScale = SIMD3(1, 3.6, 1)
-            node.addChildNode(n)
-        case .palm:
-            let trunk = SCNCylinder(radius: 0.22, height: 9)
-            trunk.radialSegmentCount = 6
-            trunk.materials = [bark]
-            let t = SCNNode(geometry: trunk)
-            t.simdPosition = SIMD3(0, 4.5, 0)
-            node.addChildNode(t)
-            for k in 0..<6 {
-                let leaf = SCNBox(width: 0.6, height: 0.08, length: 4.2, chamferRadius: 0)
-                leaf.materials = [leaves(0x4E7D2E)]
-                let l = SCNNode(geometry: leaf)
-                l.simdPosition = SIMD3(0, 9, 0)
-                l.simdOrientation = simd_quatf(angle: Float(k) * .pi / 3, axis: SIMD3(0, 1, 0)) * simd_quatf(angle: 0.35, axis: SIMD3(1, 0, 0))
-                l.simdPivot = float4x4(translation: SIMD3(0, 0, 2.1))
-                node.addChildNode(l)
-            }
-        }
-        return node.flattenedClone()
-    }
-
-    static func vegetation(route: Route, terrain: TerrainModel, frame: WorldFrame, rng: inout SceneRandom) -> SCNNode {
-        let biome = route.record.biome
-        let kinds: [(TreeKind, Double)]
-        let density: Double
-        switch biome {
-        case .alpine: kinds = [(.conifer, 0.85), (.deciduous, 0.15)]; density = 1.6
-        case .forest: kinds = [(.deciduous, 0.65), (.poplar, 0.15), (.conifer, 0.2)]; density = 4.5
-        case .countryside: kinds = [(.deciduous, 0.6), (.poplar, 0.4)]; density = 0.8
-        case .coastal: kinds = [(.olive, 0.5), (.palm, 0.2), (.conifer, 0.3)]; density = 0.9
-        case .lakes: kinds = [(.deciduous, 0.55), (.conifer, 0.35), (.poplar, 0.1)]; density = 1.4
-        case .urban: kinds = [(.deciduous, 0.8), (.poplar, 0.2)]; density = 0.55
-        }
-        let protos = Dictionary(uniqueKeysWithValues: TreeKind.allCases.map { ($0, treePrototype($0)) })
-        let container = SCNNode()
-        container.name = "vegetation"
-        let chunkLength = 1500.0
-        var chunk = SCNNode()
-        var chunkStart = 0.0
-        let treeline = 2050.0
-        var d = 0.0
-        while d < route.length {
-            let p = route.position(at: d)
-            let dir = route.direction(at: d)
-            let right = LocalPoint(x: dir.y, y: -dir.x)
-            let tries = Int(density * 2 + rng.range(0, 1))
-            for _ in 0..<tries {
-                // Exponential falloff: dense near the road, thinning into the distance.
-                let lateral = (biome == .forest ? 7.5 : 10) + min(900, -log(max(rng.unit(), 1e-6)) * (biome == .forest ? 60 : 140))
-                let side = rng.chance(0.5) ? 1.0 : -1.0
-                let q = p + right * (side * lateral) + dir * rng.range(-6, 6)
-                let forest = TerrainModel.fbm(q.x / 350, q.y / 350, octaves: 2, seed: 99)
-                if forest < (biome == .forest ? -0.45 : -0.05) { continue }
-                if terrain.nearestRoad(x: q.x, y: q.y, maxDistance: 9) != nil { continue }
-                let h = terrain.height(x: q.x, y: q.y)
-                if let w = terrain.waterLevel, h < w + 1.2 { continue }
-                if biome == .alpine, h > treeline + 120 * forest { continue }
-                let hx = terrain.height(x: q.x + 4, y: q.y), hy = terrain.height(x: q.x, y: q.y + 4)
-                if abs(hx - h) > 3.6 || abs(hy - h) > 3.6 { continue } // too steep / cliff
-                var pick = rng.unit()
-                var kind = kinds[0].0
-                for (k, w) in kinds {
-                    if pick < w { kind = k; break }
-                    pick -= w
-                }
-                if biome == .alpine, h > 1500 { kind = .conifer }
-                let tree = protos[kind]!.clone()
-                tree.simdPosition = frame.point(q, h - 0.3)
-                let s = rng.float(0.7, 1.35)
-                tree.simdScale = SIMD3(s, s * rng.float(0.85, 1.2), s)
-                tree.simdEulerAngles = SIMD3(0, rng.float(0, 6.28), 0)
-                chunk.addChildNode(tree)
-            }
-            d += 10
-            if d - chunkStart > chunkLength || d >= route.length {
-                if !chunk.childNodes.isEmpty {
-                    let flat = chunk.flattenedClone()
-                    flat.castsShadow = true
-                    container.addChildNode(flat)
-                }
-                chunk = SCNNode()
-                chunkStart = d
-            }
-        }
-        // Boulders above the treeline.
-        if biome == .alpine {
-            let rock = SCNSphere(radius: 1)
-            rock.segmentCount = 6
-            rock.materials = [SceneMath.material(NSColor(white: 0.55, alpha: 1), roughness: 0.95, lit: .lambert)]
-            let rocks = SCNNode()
-            var dd = 0.0
-            while dd < route.length {
-                let p = route.position(at: dd)
-                if route.elevation(at: dd) > treeline - 100, rng.chance(0.5) {
-                    let dir = route.direction(at: dd)
-                    let right = LocalPoint(x: dir.y, y: -dir.x)
-                    let q = p + right * ((rng.chance(0.5) ? 1 : -1) * rng.range(8, 70))
-                    if terrain.nearestRoad(x: q.x, y: q.y, maxDistance: 8) == nil {
-                        let n = SCNNode(geometry: rock)
-                        n.simdPosition = frame.point(q, terrain.height(x: q.x, y: q.y) - 0.3)
-                        n.simdScale = SIMD3(rng.float(0.4, 2.2), rng.float(0.3, 1.2), rng.float(0.4, 2))
-                        rocks.addChildNode(n)
-                    }
-                }
-                dd += 25
-            }
-            if !rocks.childNodes.isEmpty { container.addChildNode(rocks.flattenedClone()) }
-        }
-        return container
-    }
-
-    // MARK: - Buildings
-
-    static func buildings(route: Route, terrain: TerrainModel, frame: WorldFrame, rng: inout SceneRandom) -> SCNNode {
-        let biome = route.record.biome
-        let container = SCNNode()
-        container.name = "buildings"
-        let walls: [UInt32]
-        let roofs: [UInt32]
-        switch biome {
-        case .alpine: walls = [0x8B5E3C, 0xE9E1D0, 0x7A4E2D, 0xF1EADB]; roofs = [0x3B3B3B, 0x5A4632]
-        case .coastal, .lakes: walls = [0xE8B38A, 0xF2D49B, 0xE4C9A8, 0xD98E6A, 0xF5E6CF]; roofs = [0xA7532E, 0x8F4A2C]
-        case .urban: walls = [0xD8D2C4, 0xB8A48C, 0x9A8E80, 0xC9B79C, 0xE2DED5, 0x8C6E5A]; roofs = [0x4A4A4A, 0x5C5C5C]
-        default: walls = [0xC4A484, 0xE6DCC8, 0x9C5B3C, 0xD8C6A8]; roofs = [0x6B3A2A, 0x4A4A4A]
-        }
-        func mat(_ hex: UInt32, _ rough: CGFloat = 0.85) -> SCNMaterial {
-            SceneMath.material(NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
-                                       blue: CGFloat(hex & 0xFF) / 255, alpha: 1), roughness: rough, lit: .lambert)
-        }
-        let wallMats = walls.map { mat($0) }
-        let roofMats = roofs.map { mat($0, 0.7) }
-        let windowMat = mat(0x2A3440, 0.2)
-
-        var chunk = SCNNode()
-        var chunkStart = 0.0
-        var d = 0.0
-        let spacing = biome == .urban ? 16.0 : 22.0
-        while d < route.length {
-            // Settlements: towns at the ends of climbs, villages scattered, cities everywhere.
-            let townFactor: Double
-            switch biome {
-            case .urban: townFactor = 0.85
-            case .alpine:
-                let ends = min(d, route.length - d)
-                townFactor = ends < 1200 ? 0.55 : 0.03
-            case .coastal, .lakes: townFactor = 0.35
-            default: townFactor = 0.10 + 0.25 * max(0, TerrainModel.fbm(d / 2000, 0, octaves: 2, seed: 5))
-            }
-            let p = route.position(at: d)
-            let dir = route.direction(at: d)
-            let right = LocalPoint(x: dir.y, y: -dir.x)
-            for side in [-1.0, 1.0] where rng.chance(townFactor) {
-                let w = rng.range(7, biome == .urban ? 18 : 12), depth = rng.range(7, biome == .urban ? 16 : 11)
-                let floors = biome == .urban ? Int(rng.range(2, 7)) : Int(rng.range(1, 3))
-                let height = Double(floors) * 3.1 + 1
-                let lateral = 9 + depth / 2 + rng.range(0, biome == .urban ? 4 : 18)
-                let q = p + right * (side * lateral)
-                // Another road (e.g. the next switchback) running through the plot.
-                if let hit = terrain.nearestRoad(x: q.x, y: q.y, maxDistance: lateral - 2), hit.distance < max(w, depth) / 2 + 6 {
-                    continue
-                }
-                let h0 = terrain.height(x: q.x, y: q.y)
-                if let wl = terrain.waterLevel, h0 < wl + 1 { continue }
-                let corners = [(-w / 2, -depth / 2), (w / 2, -depth / 2), (-w / 2, depth / 2), (w / 2, depth / 2)].map { c -> Double in
-                    let cq = q + dir * c.0 + right * c.1
-                    return terrain.height(x: cq.x, y: cq.y)
-                }
-                let lo = corners.min()!, hi = corners.max()!
-                if hi - lo > 6 { continue }
-                let house = SCNNode()
-                let box = SCNBox(width: CGFloat(w), height: CGFloat(height + (hi - lo)), length: CGFloat(depth), chamferRadius: 0)
-                box.materials = [rng.pick(wallMats)]
-                let body = SCNNode(geometry: box)
-                body.simdPosition = SIMD3(0, Float((height + (hi - lo)) / 2), 0)
-                house.addChildNode(body)
-                // Window band.
-                let band = SCNBox(width: CGFloat(w) + 0.04, height: 1.0, length: CGFloat(depth) * 0.7, chamferRadius: 0)
-                band.materials = [windowMat]
-                for f in 0..<floors {
-                    let b = SCNNode(geometry: band)
-                    b.simdPosition = SIMD3(0, Float(hi - lo) + Float(f) * 3.1 + 2.0, 0)
-                    house.addChildNode(b)
-                }
-                if biome != .urban || rng.chance(0.3) {
-                    let roof = SCNPyramid(width: CGFloat(w) * 1.1, height: CGFloat(min(w, depth) * 0.45), length: CGFloat(depth) * 1.1)
-                    roof.materials = [rng.pick(roofMats)]
-                    let r = SCNNode(geometry: roof)
-                    r.simdPosition = SIMD3(0, Float(height + (hi - lo)), 0)
-                    house.addChildNode(r)
-                }
-                house.simdPosition = frame.point(q, lo - 0.3)
-                house.simdOrientation = simd_quatf(angle: frame.yaw(dir), axis: SIMD3(0, 1, 0))
-                chunk.addChildNode(house)
-            }
-            d += spacing * rng.range(0.7, 1.3)
-            if d - chunkStart > 1500 || d >= route.length {
-                if !chunk.childNodes.isEmpty { container.addChildNode(chunk.flattenedClone()) }
-                chunk = SCNNode()
-                chunkStart = d
-            }
-        }
-        return container
-    }
-
-    // MARK: - Crowds
-
-    static func crowds(route: Route, terrain: TerrainModel, frame: WorldFrame, rng: inout SceneRandom) -> SCNNode {
-        let container = SCNNode()
-        container.name = "crowds"
-        let shirtColors: [UInt32] = [0xD62828, 0xF77F00, 0xFCBF49, 0x2A9D8F, 0x264653, 0xE76F51, 0xFFFFFF, 0x1D3557, 0x8338EC, 0x06D6A0, 0xFFD60A]
-        let skin: [UInt32] = [0xF1C27D, 0xC68E6A, 0x8D5A3B, 0xE0AC8B, 0x5C3A21]
-        func mat(_ hex: UInt32) -> SCNMaterial {
-            SceneMath.material(NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
-                                       blue: CGFloat(hex & 0xFF) / 255, alpha: 1), roughness: 0.8, lit: .lambert)
-        }
-        let bodies = shirtColors.map { c -> SCNGeometry in
-            let g = SCNCapsule(capRadius: 0.21, height: 1.35)
-            g.radialSegmentCount = 6
-            g.heightSegmentCount = 1
-            g.materials = [mat(c)]
-            return g
-        }
-        let heads = skin.map { c -> SCNGeometry in
-            let g = SCNSphere(radius: 0.12)
-            g.segmentCount = 6
-            g.materials = [mat(c)]
-            return g
-        }
-        let flagColors: [UInt32] = [0xD62828, 0x1D3557, 0xFCBF49, 0x2A9D8F, 0xFFFFFF]
-        let flagMats = flagColors.map { mat($0) }
-
-        // Crowd zones: the final 3 km of big climbs, and the last 400 m before the line.
-        var zones: [(start: Double, end: Double, peakAtEnd: Bool)] = route.climbs
-            .filter { $0.category <= .cat3 }
-            .map { (max($0.startDistance, $0.endDistance - 3000), $0.endDistance + 60, true) }
-        zones.append((max(0, route.length - 400), route.length, true))
-        if route.isLoop { zones.append((0, 150, false)) }
-
-        for zone in zones {
-            let node = SCNNode()
-            var d = zone.start
-            while d < min(zone.end, route.length) {
-                let progress = (d - zone.start) / max(zone.end - zone.start, 1)
-                let densityGap = zone.peakAtEnd ? 3.8 - 2.9 * progress : 1.5
-                let p = route.position(at: d)
-                let dir = route.direction(at: d)
-                let right = LocalPoint(x: dir.y, y: -dir.x)
-                let e = route.elevation(at: d)
-                for side in [-1.0, 1.0] where rng.chance(0.8) {
-                    let q = p + right * (side * rng.range(6.3, 8.6))
-                    let h = max(terrain.height(x: q.x, y: q.y), e - 0.2)
-                    let person = SCNNode()
-                    let b = SCNNode(geometry: rng.pick(bodies))
-                    b.simdPosition = SIMD3(0, 0.88, 0)
-                    person.addChildNode(b)
-                    let hd = SCNNode(geometry: rng.pick(heads))
-                    hd.simdPosition = SIMD3(0, 1.68, 0)
-                    person.addChildNode(hd)
-                    if rng.chance(0.12) {
-                        let pole = SCNCylinder(radius: 0.015, height: 1.6)
-                        pole.materials = [mat(0xDDDDDD)]
-                        let pn = SCNNode(geometry: pole)
-                        pn.simdPosition = SIMD3(0.25, 2.0, 0)
-                        person.addChildNode(pn)
-                        let flag = SCNBox(width: 0.02, height: 0.5, length: 0.8, chamferRadius: 0)
-                        flag.materials = [rng.pick(flagMats)]
-                        let fn = SCNNode(geometry: flag)
-                        fn.simdPosition = SIMD3(0.25, 2.55, 0.4)
-                        person.addChildNode(fn)
-                    }
-                    person.simdPosition = frame.point(q, h)
-                    person.simdOrientation = simd_quatf(angle: frame.yaw(LocalPoint(x: -right.x * side, y: -right.y * side)), axis: SIMD3(0, 1, 0))
-                    node.addChildNode(person)
-                }
-                d += max(0.9, densityGap * rng.range(0.6, 1.4))
-            }
-            if !node.childNodes.isEmpty { container.addChildNode(node.flattenedClone()) }
-        }
-        return container
     }
 
     // MARK: - Signage

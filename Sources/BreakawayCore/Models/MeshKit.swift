@@ -167,6 +167,8 @@ public struct ModelMesh: Sendable {
     public var positions: [SIMD3<Float>] = []
     public var normals: [SIMD3<Float>] = []
     public var uvs: [SIMD2<Float>] = []
+    /// Per-vertex colour (multiplied with the material); white unless tinted.
+    public var colors: [SIMD4<Float>] = []
     public private(set) var parts: [(material: String, indices: [UInt32])] = []
 
     public init() {}
@@ -191,12 +193,13 @@ public struct ModelMesh: Sendable {
         positions.append(p)
         normals.append(n)
         uvs.append(uv)
+        colors.append(SIMD4(1, 1, 1, 1))
         return UInt32(positions.count - 1)
     }
 
     /// Appends another mesh, optionally transformed and with materials renamed.
     public mutating func append(_ other: ModelMesh, transform: RigidTransform = .identity, scale: SIMD3<Float> = SIMD3(1, 1, 1),
-                                rename: [String: String] = [:]) {
+                                rename: [String: String] = [:], tint: SIMD4<Float> = SIMD4(1, 1, 1, 1)) {
         let base = UInt32(positions.count)
         let uniform = scale.x == scale.y && scale.y == scale.z
         for i in 0..<other.positions.count {
@@ -205,11 +208,21 @@ public struct ModelMesh: Sendable {
             if !uniform { n = SIMD3(n.x / scale.x, n.y / scale.y, n.z / scale.z).unit }
             normals.append(transform.rotate(n))
             uvs.append(other.uvs[i])
+            colors.append(other.colors[i] * tint)
         }
         for part in other.parts {
             addIndices(part.indices.map { $0 + base }, material: rename[part.material] ?? part.material)
         }
     }
+
+    /// Recolours vertices from index `from` onwards.
+    public mutating func colorize(from: Int = 0, _ f: (_ position: SIMD3<Float>, _ normal: SIMD3<Float>) -> SIMD4<Float>) {
+        guard from < positions.count else { return }
+        for i in from..<positions.count { colors[i] = f(positions[i], normals[i]) }
+    }
+
+    /// True when any vertex carries a colour other than white.
+    public var hasVertexColors: Bool { colors.contains { $0 != SIMD4(1, 1, 1, 1) } }
 
     public func transformed(_ t: RigidTransform) -> ModelMesh {
         var m = ModelMesh()
@@ -532,7 +545,15 @@ public struct ModelMesh: Sendable {
     public func objText(name: String = "model") -> String {
         var s = "o \(name)\n"
         s.reserveCapacity(positions.count * 80)
-        for p in positions { s += "v \(p.x) \(p.y) \(p.z)\n" }
+        let colored = hasVertexColors
+        for (i, p) in positions.enumerated() {
+            if colored {
+                let c = colors[i]
+                s += "v \(p.x) \(p.y) \(p.z) \(c.x) \(c.y) \(c.z)\n"
+            } else {
+                s += "v \(p.x) \(p.y) \(p.z)\n"
+            }
+        }
         for t in uvs { s += "vt \(t.x) \(t.y)\n" }
         for n in normals { s += "vn \(n.x) \(n.y) \(n.z)\n" }
         for part in parts {

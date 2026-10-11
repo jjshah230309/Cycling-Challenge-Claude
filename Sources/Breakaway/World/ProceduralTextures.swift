@@ -113,6 +113,48 @@ enum ProceduralTextures {
         return ctx.makeImage()!
     }
 
+    /// Tileable normal map from periodic value noise (RGB = tangent-space normal).
+    static func normalMap(size n: Int, scale: Int, strength: Double, seed: UInt64) -> CGImage {
+        var r = SceneRandom(seed: seed)
+        // Two octaves of periodic value noise on lattices of `scale` and `2·scale` cells.
+        func lattice(_ cells: Int) -> [Double] { (0..<(cells * cells)).map { _ in r.unit() } }
+        let l1 = lattice(scale), l2 = lattice(scale * 2), l3 = lattice(scale * 4)
+        func value(_ l: [Double], _ cells: Int, _ x: Double, _ y: Double) -> Double {
+            let fx = x * Double(cells), fy = y * Double(cells)
+            let x0 = Int(floor(fx)), y0 = Int(floor(fy))
+            let tx = fx - Double(x0), ty = fy - Double(y0)
+            let sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty)
+            func at(_ i: Int, _ j: Int) -> Double { l[((j % cells + cells) % cells) * cells + ((i % cells + cells) % cells)] }
+            let a = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * sx
+            let b = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * sx
+            return a + (b - a) * sy
+        }
+        var h = [Double](repeating: 0, count: n * n)
+        for j in 0..<n {
+            for i in 0..<n {
+                let x = Double(i) / Double(n), y = Double(j) / Double(n)
+                h[j * n + i] = value(l1, scale, x, y) + 0.5 * value(l2, scale * 2, x, y) + 0.25 * value(l3, scale * 4, x, y)
+            }
+        }
+        var pixels = [UInt8](repeating: 255, count: n * n * 4)
+        for j in 0..<n {
+            for i in 0..<n {
+                let dx = (h[j * n + (i + 1) % n] - h[j * n + (i + n - 1) % n]) * strength
+                let dy = (h[((j + 1) % n) * n + i] - h[((j + n - 1) % n) * n + i]) * strength
+                var nx = -dx, ny = -dy, nz = 1.0
+                let l = (nx * nx + ny * ny + nz * nz).squareRoot()
+                nx /= l; ny /= l; nz /= l
+                let k = (j * n + i) * 4
+                pixels[k] = UInt8(max(0, min(255, (nx * 0.5 + 0.5) * 255)))
+                pixels[k + 1] = UInt8(max(0, min(255, (ny * 0.5 + 0.5) * 255)))
+                pixels[k + 2] = UInt8(max(0, min(255, (nz * 0.5 + 0.5) * 255)))
+            }
+        }
+        let ctx = CGContext(data: &pixels, width: n, height: n, bitsPerComponent: 8, bytesPerRow: n * 4,
+                            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        return ctx.makeImage()!
+    }
+
     // MARK: Sky
 
     static func sky(biome: RouteRecord.Biome) -> CGImage {

@@ -170,4 +170,62 @@ final class ModelTests: XCTestCase {
             print("exported \(name): \(all.triangleCount) triangles")
         }
     }
+
+    func testSceneryBuilds() {
+        for kind in Scenery.TreeKind.allCases {
+            var counts: [Int] = []
+            for detail: Float in [1, 0.5, 0.2] {
+                let t = Scenery.tree(kind, seed: 42, detail: detail)
+                assertValid(t, "\(kind) \(detail)")
+                counts.append(t.triangleCount)
+                let b = t.bounds
+                XCTAssertGreaterThan(b.max.y, 3, "\(kind) height")
+                XCTAssertLessThan(b.max.y, 30, "\(kind) height")
+                XCTAssertTrue(t.hasVertexColors || kind == .palm, "\(kind) colours")
+            }
+            XCTAssertGreaterThan(counts[0], counts[2], "\(kind) LOD")
+        }
+        for style in Scenery.HouseStyle.allCases {
+            let h = Scenery.house(style, width: 10, depth: 8, floors: 2, foundation: 1, wallColor: SIMD4(1, 0.9, 0.8, 1),
+                                  roofColor: SIMD4(0.5, 0.2, 0.1, 1), seed: 3)
+            assertValid(h, "house \(style)")
+            XCTAssertGreaterThan(h.bounds.max.y, 6.4, "\(style)")
+            XCTAssertEqual(h.bounds.min.y, -1, accuracy: 0.01)
+        }
+        for pose in Scenery.SpectatorPose.allCases {
+            assertValid(Scenery.spectator(pose: pose, shirt: SIMD4(1, 0, 0, 1), trousers: SIMD4(0, 0, 1, 1), skin: SIMD4(0.8, 0.6, 0.5, 1), seed: 9), "\(pose)")
+        }
+        assertValid(Scenery.rock(seed: 5), "rock")
+        assertValid(Scenery.campervan(color: SIMD4(1, 1, 1, 1), seed: 2), "van")
+        assertValid(Scenery.grassTuft(seed: 1, flowers: true), "grass")
+    }
+
+    func testExportSceneryPreview() throws {
+        guard let dir = ProcessInfo.processInfo.environment["BREAKAWAY_EXPORT_OBJ"] else { throw XCTSkip("set BREAKAWAY_EXPORT_OBJ") }
+        let url = URL(fileURLWithPath: dir)
+        var trees = ModelMesh()
+        for (i, kind) in Scenery.TreeKind.allCases.enumerated() {
+            trees.append(Scenery.tree(kind, seed: UInt64(i + 7)), transform: .translation(SIMD3(Float(i) * 9 - 27, 0, 0)))
+            trees.append(Scenery.tree(kind, seed: UInt64(i + 7), detail: 0.5), transform: .translation(SIMD3(Float(i) * 9 - 27, 0, 12)))
+        }
+        for k in 0..<4 { trees.append(Scenery.rock(seed: UInt64(k)), transform: .translation(SIMD3(Float(k) * 3 - 5, 0.3, -6))) }
+        try trees.objText(name: "trees").write(to: url.appendingPathComponent("trees.obj"), atomically: true, encoding: .utf8)
+        var houses = ModelMesh()
+        let wall: [SIMD4<Float>] = [SIMD4(0.95, 0.9, 0.8, 1), SIMD4(0.9, 0.75, 0.6, 1), SIMD4(0.85, 0.85, 0.85, 1)]
+        for (i, style) in Scenery.HouseStyle.allCases.enumerated() {
+            let h = Scenery.house(style, width: i % 2 == 0 ? 11 : 8, depth: i % 2 == 0 ? 8 : 10, floors: style == .apartment ? 4 : 2,
+                                  wallColor: wall[i % 3], roofColor: SIMD4(0.55, 0.25, 0.15, 1), seed: UInt64(i))
+            houses.append(h, transform: .translation(SIMD3(Float(i) * 15 - 37, 0, 0)))
+        }
+        for (i, pose) in Scenery.SpectatorPose.allCases.enumerated() {
+            houses.append(Scenery.spectator(pose: pose, shirt: SIMD4(0.9, 0.2, 0.2, 1), trousers: SIMD4(0.1, 0.1, 0.3, 1),
+                                            skin: SIMD4(0.8, 0.6, 0.45, 1), seed: UInt64(i), detail: 1),
+                          transform: .translation(SIMD3(Float(i) * 1.2 - 3, 0, 9)))
+        }
+        houses.append(Scenery.campervan(color: SIMD4(0.95, 0.95, 0.9, 1), seed: 4), transform: .translation(SIMD3(6, 0, 10)))
+        for k in 0..<40 {
+            houses.append(Scenery.grassTuft(seed: UInt64(k), flowers: k % 5 == 0), transform: .translation(SIMD3(Float(k % 8) * 0.4 - 12, 0, 9 + Float(k / 8) * 0.4)))
+        }
+        try houses.objText(name: "houses").write(to: url.appendingPathComponent("houses.obj"), atomically: true, encoding: .utf8)
+    }
 }

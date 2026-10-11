@@ -9,7 +9,8 @@ import simd
 enum ModelGeometry {
     /// Builds an SCNGeometry whose materials are named after the mesh's material parts.
     static func geometry(_ mesh: ModelMesh, material: (String) -> SCNMaterial) -> SCNGeometry {
-        var pos = [Float](), nrm = [Float](), uv = [Float]()
+        var pos = [Float](), nrm = [Float](), uv = [Float](), col = [Float]()
+        let colored = mesh.hasVertexColors
         pos.reserveCapacity(mesh.vertexCount * 3)
         nrm.reserveCapacity(mesh.vertexCount * 3)
         uv.reserveCapacity(mesh.vertexCount * 2)
@@ -18,6 +19,10 @@ enum ModelGeometry {
             pos += [p.x, p.y, p.z]
             nrm += [n.x, n.y, n.z]
             uv += [t.x, 1 - t.y]
+            if colored {
+                let c = mesh.colors[i]
+                col += [c.x, c.y, c.z, c.w]
+            }
         }
         func source(_ a: [Float], _ semantic: SCNGeometrySource.Semantic, _ comps: Int) -> SCNGeometrySource {
             let data = a.withUnsafeBufferPointer { Data(buffer: $0) }
@@ -33,7 +38,9 @@ enum ModelGeometry {
             let m = material(part.material)
             mats.append(m)
         }
-        let g = SCNGeometry(sources: [source(pos, .vertex, 3), source(nrm, .normal, 3), source(uv, .texcoord, 2)], elements: elements)
+        var sources = [source(pos, .vertex, 3), source(nrm, .normal, 3), source(uv, .texcoord, 2)]
+        if colored { sources.append(source(col, .color, 4)) }
+        let g = SCNGeometry(sources: sources, elements: elements)
         g.materials = mats
         return g
     }

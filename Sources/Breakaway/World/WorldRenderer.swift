@@ -30,9 +30,13 @@ final class WorldRenderer {
     private var camPosition: SIMD3<Float>?
     private var camTarget: SIMD3<Float>?
     private var clock: Float = 0
+    private let waterMaterial: SCNMaterial?
+    private let waterScale: SCNMatrix4
 
     init(world: BuiltWorld, simulation: RideSimulation) {
         self.world = world
+        waterMaterial = world.scene.rootNode.childNode(withName: "water", recursively: false)?.geometry?.firstMaterial
+        waterScale = waterMaterial?.normal.contentsTransform ?? SCNMatrix4Identity
         let camera = SCNCamera()
         camera.fieldOfView = 62
         camera.zNear = 0.1
@@ -157,8 +161,12 @@ final class WorldRenderer {
         cameraNode.simdPosition = camPosition!
         cameraNode.simdLook(at: camTarget!, up: up, localFront: SIMD3(0, 0, -1))
 
-        // Keep crisp shadows around the player.
+        // Keep the sun's shadow frustum centred on the action.
         world.sun.simdPosition = riderPos - world.sun.simdWorldFront * 250
+        // Ripple the water.
+        if let water = waterMaterial {
+            water.normal.contentsTransform = SCNMatrix4Mult(waterScale, SCNMatrix4MakeTranslation(CGFloat(clock * 0.004), CGFloat(clock * 0.0027), 0))
+        }
     }
 }
 
