@@ -9,7 +9,7 @@ Ride the Alpe d'Huez hairpins, the Stelvio, Mont Ventoux, the Zoncolan and the A
 | Stelvio hairpins (helicopter cam) | Trouée d'Arenberg pavé |
 |---|---|
 | ![Stelvio](docs/screenshots/stelvio-hairpins.png) | ![Arenberg](docs/screenshots/arenberg.png) |
-| **Milan–San Remo finale (Liguria)** | **Alpe d'Huez (side cam)** |
+| **Milan–San Remo finale (side cam)** | **Alpe d'Huez (side cam)** |
 | ![Sanremo](docs/screenshots/sanremo.png) | ![Alpe d'Huez](docs/screenshots/alpe-dhuez-side.png) |
 
 *These screenshots come from the app's headless renderer (`Breakaway --snapshot <dir> [routes]`), which CI runs on every change.*
