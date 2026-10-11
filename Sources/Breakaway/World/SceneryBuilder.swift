@@ -93,7 +93,9 @@ enum SceneryBuilder {
             let right = LocalPoint(x: dir.y, y: -dir.x)
             let tries = Int(density * 2 + rng.range(0, 1))
             for _ in 0..<tries {
-                let lateral = (biome == .forest ? 7.5 : 10) + min(900, -log(max(rng.unit(), 1e-6)) * (biome == .forest ? 60 : 140))
+                let falloff: Double = biome == .forest ? 60 : 140
+                let minLateral: Double = biome == .forest ? 7.5 : 10
+                let lateral: Double = minLateral + min(900, -log(max(rng.unit(), 1e-6)) * falloff)
                 let side = rng.chance(0.5) ? 1.0 : -1.0
                 let q = p + right * (side * lateral) + dir * rng.range(-6, 6)
                 let forest = TerrainModel.fbm(q.x / 350, q.y / 350, octaves: 2, seed: 99)
@@ -113,8 +115,10 @@ enum SceneryBuilder {
                 if biome == .alpine, h > 1500 { kind = .spruce }
                 let variant = Int(rng.unit() * 3) % 3
                 let s = rng.float(0.65, 1.25)
-                let scale = SIMD3(s, s * rng.float(0.85, 1.15), s)
-                let tint = SIMD4(rng.float(0.88, 1.08), rng.float(0.9, 1.08), rng.float(0.85, 1.05), 1)
+                let stretch: Float = rng.float(0.85, 1.15)
+                let scale = SIMD3<Float>(s, s * stretch, s)
+                let tr: Float = rng.float(0.88, 1.08), tg: Float = rng.float(0.9, 1.08), tb: Float = rng.float(0.85, 1.05)
+                let tint = SIMD4<Float>(tr, tg, tb, 1)
                 let pos = frame.point(q, h - 0.2)
                 let yaw = rng.float(0, 6.28)
                 let lods = protos[kind]![variant]
@@ -137,11 +141,14 @@ enum SceneryBuilder {
                     let p = route.position(at: dd)
                     let dir = route.direction(at: dd)
                     let right = LocalPoint(x: dir.y, y: -dir.x)
-                    let q = p + right * ((rng.chance(0.5) ? 1 : -1) * rng.range(8, high ? 120 : 60))
+                    let rockSide: Double = rng.chance(0.5) ? 1 : -1
+                    let rockLateral: Double = rng.range(8, high ? 120 : 60)
+                    let q = p + right * (rockSide * rockLateral)
                     if terrain.nearestRoad(x: q.x, y: q.y, maxDistance: 8) == nil {
-                        let size = rng.float(0.5, high ? 3.2 : 1.6)
+                        let size: Float = rng.float(0.5, high ? 3.2 : 1.6)
+                        let squash: Float = rng.float(0.6, 1.1)
                         rockChunks.add(rng.pick(rocks), distance: dd, at: frame.point(q, terrain.height(x: q.x, y: q.y) - 0.25 * Double(size)),
-                                    yaw: rng.float(0, 6.28), scale: SIMD3(size, size * rng.float(0.6, 1.1), size))
+                                    yaw: rng.float(0, 6.28), scale: SIMD3<Float>(size, size * squash, size))
                     }
                 }
                 dd += 20
@@ -164,7 +171,12 @@ enum SceneryBuilder {
     static func grass(route: Route, terrain: TerrainModel, frame: WorldFrame, rng: inout SceneRandom) -> SCNNode {
         let biome = route.record.biome
         guard biome != .urban else { return SCNNode() }
-        let tufts = (0..<10).map { Scenery.grassTuft(seed: UInt64($0 * 17 + 3), flowers: $0 % 3 == 0 && biome == .alpine, dry: biome == .coastal) }
+        var tufts: [ModelMesh] = []
+        let alpine = biome == .alpine, dry = biome == .coastal
+        for k in 0..<10 {
+            let flowers: Bool = alpine && k % 3 == 0
+            tufts.append(Scenery.grassTuft(seed: UInt64(k * 17 + 3), flowers: flowers, dry: dry))
+        }
         var chunks = Chunks(length: 150, route: route, frame: frame)
         var d = 0.0
         while d < route.length {
@@ -230,7 +242,8 @@ enum SceneryBuilder {
                 let style = rng.pick(styles)
                 let w = rng.range(8, style == .apartment ? 20 : 13), depth = rng.range(7, style == .apartment ? 16 : 11)
                 let floors = style == .apartment ? Int(rng.range(3, 7)) : Int(rng.range(1.6, 3.4))
-                let lateral = 9 + depth / 2 + rng.range(0, biome == .urban ? 4 : 18)
+                let setback: Double = rng.range(0, biome == .urban ? 4 : 18)
+                let lateral: Double = 9 + depth / 2 + setback
                 let q = p + right * (side * lateral)
                 if let hit = terrain.nearestRoad(x: q.x, y: q.y, maxDistance: lateral - 2), hit.distance < max(w, depth) / 2 + 6 { continue }
                 let h0 = terrain.height(x: q.x, y: q.y)
@@ -282,7 +295,9 @@ enum SceneryBuilder {
                     let q = p + right * (side * rng.range(6.2, 8.4)) + dir * rng.range(-0.5, 0.5)
                     let h = max(terrain.height(x: q.x, y: q.y), e - 0.2)
                     // More arms in the air near the summit.
-                    let pose: Scenery.SpectatorPose = rng.chance(0.25 + 0.4 * progress) ? .cheering : poses[Int(rng.unit() * Double(poses.count)) % poses.count]
+                    let cheer: Bool = rng.chance(0.25 + 0.4 * progress)
+                    let anyPose: Scenery.SpectatorPose = poses[Int(rng.unit() * Double(poses.count)) % poses.count]
+                    let pose: Scenery.SpectatorPose = cheer ? .cheering : anyPose
                     let person = Scenery.spectator(pose: pose, shirt: Scenery.rgbColor(rng.pick(shirts)), trousers: Scenery.rgbColor(rng.pick(trousers)),
                                                    skin: Scenery.rgbColor(rng.pick(skins)), flag: Scenery.rgbColor(rng.pick(flags)),
                                                    seed: UInt64(d * 7) &+ (side > 0 ? 3 : 0), detail: 0.5)
