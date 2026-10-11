@@ -33,22 +33,40 @@ enum ProceduralTextures {
     static let verge: CGFloat = (5.5 - 3.6) / 11.0
 
     static func asphalt(urban: Bool) -> CGImage {
-        let w = 512, h = 512
+        let w = 1024, h = 1024
         let ctx = context(w, h)
         let W = CGFloat(w), H = CGFloat(h)
         ctx.setFillColor(cg(urban ? 0x8A8A86 : 0x7B6A55))
         ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
-        speckle(ctx, w: w, h: h, count: 2500, colors: urban ? [0x9A9A96, 0x6E6E6A] : [0x6B5A45, 0x8E7B62, 0x5E7046], size: 1...4, alpha: 0.4...0.9, seed: 1)
+        speckle(ctx, w: w, h: h, count: 10000, colors: urban ? [0x9A9A96, 0x6E6E6A] : [0x6B5A45, 0x8E7B62, 0x5E7046], size: 1...4, alpha: 0.4...0.9, seed: 1)
         let tarRect = CGRect(x: W * verge, y: 0, width: W * (1 - 2 * verge), height: H)
         ctx.setFillColor(cg(0x3C3D40))
         ctx.fill(tarRect)
-        speckle(ctx, w: w, h: h, count: 9000, colors: [0x2E2F31, 0x4A4B4F, 0x56575B, 0x333438], size: 0.8...2.6, alpha: 0.5...1, seed: 2, rect: tarRect)
+        speckle(ctx, w: w, h: h, count: 52000, colors: [0x2E2F31, 0x4A4B4F, 0x56575B, 0x333438], size: 0.8...3.2, alpha: 0.5...1, seed: 2, rect: tarRect)
         // Repair patches.
         var r = SceneRandom(seed: 3)
         for _ in 0..<5 {
             ctx.setFillColor(cg(r.pick([0x333436, 0x45464A]), 0.55))
             ctx.fill(CGRect(x: tarRect.minX + r.range(0, Double(tarRect.width) - 80), y: r.range(0, Double(H) - 90),
                             width: r.range(30, 90), height: r.range(40, 120)))
+        }
+        // Tyre-polished wheel tracks are a touch darker and smoother.
+        for track in [0.3, 0.42, 0.58, 0.7] {
+            ctx.setFillColor(cg(0x2A2B2E, 0.18))
+            ctx.fill(CGRect(x: W * CGFloat(track) - W * 0.03, y: 0, width: W * 0.06, height: H))
+        }
+        // Tar-sealed cracks.
+        var cr = SceneRandom(seed: 5)
+        ctx.setStrokeColor(cg(0x1E1F21, 0.7))
+        ctx.setLineWidth(2)
+        for _ in 0..<6 {
+            var p = CGPoint(x: tarRect.minX + cr.range(0, Double(tarRect.width)), y: cr.range(0, Double(H)))
+            ctx.move(to: p)
+            for _ in 0..<8 {
+                p = CGPoint(x: p.x + CGFloat(cr.range(-14, 14)), y: p.y + CGFloat(cr.range(8, 26)))
+                ctx.addLine(to: p)
+            }
+            ctx.strokePath()
         }
         // Edge lines and centre dashes.
         ctx.setFillColor(cg(0xE8E8E2, 0.92))
@@ -151,6 +169,33 @@ enum ProceduralTextures {
             }
         }
         let ctx = CGContext(data: &pixels, width: n, height: n, bitsPerComponent: 8, bytesPerRow: n * 4,
+                            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        return ctx.makeImage()!
+    }
+
+    /// Normal map from an image's luminance used as a height field (bright = raised).
+    static func normalMap(fromHeight image: CGImage, strength: Double) -> CGImage {
+        let w = image.width, h = image.height
+        var lum = [UInt8](repeating: 0, count: w * h)
+        let gray = CGContext(data: &lum, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w,
+                             space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)!
+        gray.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var pixels = [UInt8](repeating: 255, count: w * h * 4)
+        for j in 0..<h {
+            for i in 0..<w {
+                let l = Double(lum[j * w + (i + w - 1) % w]), r = Double(lum[j * w + (i + 1) % w])
+                let d = Double(lum[((j + h - 1) % h) * w + i]), u = Double(lum[((j + 1) % h) * w + i])
+                var nx = -(r - l) / 255 * strength, ny = (u - d) / 255 * strength
+                var nz = 1.0
+                let len = (nx * nx + ny * ny + nz * nz).squareRoot()
+                nx /= len; ny /= len; nz /= len
+                let k = (j * w + i) * 4
+                pixels[k] = UInt8(max(0, min(255, (nx * 0.5 + 0.5) * 255)))
+                pixels[k + 1] = UInt8(max(0, min(255, (ny * 0.5 + 0.5) * 255)))
+                pixels[k + 2] = UInt8(max(0, min(255, (nz * 0.5 + 0.5) * 255)))
+            }
+        }
+        let ctx = CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
                             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         return ctx.makeImage()!
     }

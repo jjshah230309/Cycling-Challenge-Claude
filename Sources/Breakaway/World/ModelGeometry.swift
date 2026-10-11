@@ -207,7 +207,9 @@ struct KitMaterials {
 
     init(kit: Kit, number: Int, timeTrial: Bool) {
         let M = RiderModel.Material.self
-        let jersey = pbr(.white, rough: 0.62)
+        let jersey = pbr(.white, rough: 0.55)
+        jersey.clearCoat.contents = 0.18
+        jersey.clearCoatRoughness.contents = 0.5
         jersey.diffuse.contents = ModelTextures.jersey(kit: kit, number: number)
         jersey.diffuse.wrapS = .repeat
         table[M.jersey] = jersey
@@ -215,8 +217,14 @@ struct KitMaterials {
         sleeve.diffuse.contents = ModelTextures.sleeve(kit: kit)
         sleeve.diffuse.wrapS = .repeat
         table[M.sleeve] = sleeve
-        table[M.shorts] = pbr(SceneMath.color(kit.shorts), rough: 0.5)
-        table[M.skin] = pbr(SceneMath.color(kit.skin), rough: 0.55)
+        // Lycra has a soft sheen; skin is matte with a faint oily highlight.
+        let shorts = pbr(SceneMath.color(kit.shorts), rough: 0.38)
+        shorts.clearCoat.contents = 0.35
+        shorts.clearCoatRoughness.contents = 0.45
+        table[M.shorts] = shorts
+        table[M.skin] = pbr(SceneMath.color(kit.skin), rough: 0.5)
+        let lips = SceneMath.color(kit.skin).blended(withFraction: 0.25, of: NSColor(srgbRed: 0.6, green: 0.25, blue: 0.25, alpha: 1)) ?? .brown
+        table[M.lips] = pbr(lips, rough: 0.4)
         let helmet = pbr(.white, rough: 0.25, metal: 0.05)
         helmet.diffuse.contents = ModelTextures.helmet(kit.helmet, accent: kit.jerseyAccent, timeTrial: timeTrial)
         helmet.diffuse.wrapS = .repeat

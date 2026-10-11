@@ -38,7 +38,7 @@ public struct RiderModel: Sendable {
 
     public enum Material {
         public static let jersey = "jersey", shorts = "shorts", skin = "skin", helmet = "helmet", lens = "lens"
-        public static let sleeve = "sleeve"
+        public static let sleeve = "sleeve", lips = "lips"
         public static let black = "riderBlack", shoe = "shoe", sole = "sole", sock = "sock", glove = "glove", hair = "hair"
     }
 
@@ -47,7 +47,7 @@ public struct RiderModel: Sendable {
         let d = RiderDimensions(build: build)
         dimensions = d
         let hi = detail >= 0.75
-        let around = hi ? 20 : 8
+        let around = hi ? 28 : 8
         let G = d.girth
         let M = Material.self
 
@@ -58,7 +58,7 @@ public struct RiderModel: Sendable {
             (0.22, 0.30, 0.195, 0.01), (0.42, 0.325, 0.215, 0.018), (0.62, 0.355, 0.23, 0.022), (0.80, 0.37, 0.205, 0.02),
             (0.90, 0.345, 0.175, 0.016), (0.97, 0.25, 0.135, 0.014), (1.02, 0.11, 0.09, 0.016),
         ]
-        let torsoRows = hi ? 28 : 10
+        let torsoRows = hi ? 40 : 10
         var torsoPath: [V3] = []
         var torsoShape: [(w: Float, dep: Float, z: Float)] = []
         for k in 0...torsoRows {
@@ -93,12 +93,17 @@ public struct RiderModel: Sendable {
         }, material: { _ in M.skin }, capStart: false, capEnd: true)
         for s: Float in [-1, 1] {
             head.ellipsoid(center: skull + V3(s * 0.077, -0.005, 0.01), radii: V3(0.012, 0.03, 0.02), rings: 4, segments: 8, material: M.skin)
+            // Cheekbones.
+            head.ellipsoid(center: skull + V3(s * 0.045, -0.025, -0.07), radii: V3(0.026, 0.022, 0.022), rings: 4, segments: 8, material: M.skin)
         }
+        // Brow ridge and lips.
+        head.ellipsoid(center: skull + V3(0, 0.022, -0.082), radii: V3(0.06, 0.016, 0.02), rings: 4, segments: 10, material: M.skin)
+        head.ellipsoid(center: skull + V3(0, -0.072, -0.085), radii: V3(0.022, 0.008, 0.01), rings: 3, segments: 8, material: M.lips)
         // Hair below the helmet at the back.
         head.ellipsoid(center: skull + V3(0, -0.01, 0.03), radii: V3(0.079, 0.085, 0.08), rings: hi ? 8 : 4, segments: around, material: M.hair)
         // Helmet shell: an open dome, elongated, with a tail (long and pointed for TT).
-        let helmetRings = hi ? 14 : 6
-        let helmetCols = hi ? 32 : 12
+        let helmetRings = hi ? 18 : 6
+        let helmetCols = hi ? 44 : 12
         let hc = skull + V3(0, 0.022, 0.008)
         head.addGrid(rows: helmetRings + 1, cols: helmetCols, wrap: true, material: { _ in M.helmet }, point: { i, j in
             // Latitude from the brim (−0.32 rad) to the crown; the brim drops at the back.
@@ -160,7 +165,7 @@ public struct RiderModel: Sendable {
         func limb(length: Float, start: Float = 0, end: Float? = nil, radius: @escaping (Float) -> SIMD2<Float>,
                   bulge: @escaping (Float) -> Float = { _ in 0 }, material: @escaping (Float) -> String) -> ModelMesh {
             var m = ModelMesh()
-            let rows = hi ? 16 : 6
+            let rows = hi ? 22 : 6
             let y0 = start, y1 = end ?? length
             let path = (0...rows).map { k -> V3 in V3(0, mixf(y0, y1, Float(k) / Float(rows)), 0) }
             m.loft(path: path, up: V3(0, 0, 1), section: { _, t in
@@ -179,10 +184,26 @@ public struct RiderModel: Sendable {
         }, material: { $0 > 0.9 ? M.glove : M.skin })
         fa.ellipsoid(center: V3(0, 0.0, -0.004), radii: V3(0.038, 0.04, 0.036) * mixf(1, G, 0.6), rings: hi ? 6 : 3, segments: hi ? 10 : 6,
                      material: M.skin)   // elbow
-        var hand = ModelMesh()
-        hand.ellipsoid(center: V3(0, 0.05, -0.004), radii: V3(0.034, 0.058, 0.026), rings: hi ? 8 : 4, segments: hi ? 12 : 6, material: M.glove)
-        // Thumb.
-        hand.ellipsoid(center: V3(0, 0.035, -0.03), radii: V3(0.013, 0.03, 0.014), rings: 4, segments: 6, material: M.glove)
+        // Hands wrapped round the hoods: padded palm, four fingers curling under the grip,
+        // thumb on the inside; fingerless gloves leave the fingertips bare.
+        func hand(_ side: Float) -> ModelMesh {
+            var h = ModelMesh()
+            h.ellipsoid(center: V3(0, 0.045, 0.004), radii: V3(0.042, 0.055, 0.018), rings: hi ? 8 : 4, segments: hi ? 14 : 6, material: M.glove)
+            guard hi else { return h }
+            for f in 0..<4 {
+                let x = (Float(f) - 1.5) * 0.019 * side
+                let len: Float = f == 0 || f == 3 ? 0.85 : 1
+                let path = catmullRom([V3(x, 0.088, 0.004), V3(x * 1.05, 0.118 * len + 0.01, -0.008), V3(x * 1.05, 0.122 * len, -0.04),
+                                       V3(x, 0.1 * len, -0.058)], samplesPerSegment: 3)
+                h.loft(path: path, up: V3(0, 0, 1), section: { _, t in Section.circle(mixf(0.0095, 0.0075, t), count: 8) },
+                       material: { Float($0) / Float(path.count - 1) > 0.55 ? M.skin : M.glove }, capStart: true, capEnd: true)
+            }
+            let thumb = catmullRom([V3(-side * 0.032, 0.02, -0.004), V3(-side * 0.048, 0.06, -0.018), V3(-side * 0.036, 0.09, -0.04)],
+                                   samplesPerSegment: 3)
+            h.loft(path: thumb, up: V3(0, 0, 1), section: { _, t in Section.circle(mixf(0.012, 0.009, t), count: 8) },
+                   material: { Float($0) / Float(thumb.count - 1) > 0.6 ? M.skin : M.glove }, capStart: true, capEnd: true)
+            return h
+        }
         let th = limb(length: d.thigh, start: -0.07, end: d.thigh + 0.02, radius: { t in
             SIMD2(mixf(0.088, 0.054, t), mixf(0.084, 0.05, t)) * G
         }, bulge: { t in 0.012 * sin(t * .pi) * G }, material: { $0 < 0.78 ? M.shorts : M.skin })
@@ -223,8 +244,8 @@ public struct RiderModel: Sendable {
         segments[.upperArmR] = ua
         segments[.forearmL] = fa
         segments[.forearmR] = fa
-        segments[.handL] = hand
-        segments[.handR] = hand
+        segments[.handL] = hand(-1)
+        segments[.handR] = hand(1)
         segments[.thighL] = th
         segments[.thighR] = th
         segments[.shinL] = sh

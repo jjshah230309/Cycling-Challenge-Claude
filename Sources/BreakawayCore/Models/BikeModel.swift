@@ -115,7 +115,7 @@ public struct BikeModel: Sendable {
         let crankLength: Float = 0.1725
 
         // --- Tube cross-sections ---
-        let sides = hi ? 18 : 8
+        let sides = hi ? 22 : 8
         func round(_ r0: Float, _ r1: Float) -> (Int, Float) -> [SIMD2<Float>] {
             let unit = Section.circle(1, count: sides)
             return { _, t in unit.map { $0 * mixf(r0, r1, t) } }
@@ -192,6 +192,12 @@ public struct BikeModel: Sendable {
                  material: plain(M.paint), into: &body)
             // Dropout.
             body.box(center: drop + V3(0, 0, -0.004), size: V3(0.006, 0.03, 0.035), material: steel ? M.metal : M.paint)
+        }
+        if steel && hi {
+            // External brake cable under the top tube.
+            let a = ttEnd + V3(0, -0.02, 0.03), b = cluster + V3(0, -0.017, -0.05)
+            tube([a, mix3(a, b, 0.5) + V3(0, -0.003, 0), b], up: V3(0, 1, 0), section: round(0.0022, 0.0022), material: plain(M.metal),
+                 into: &body)
         }
         if steel {
             // Polished lugs at the head tube and seat cluster.
@@ -324,6 +330,9 @@ public struct BikeModel: Sendable {
         }
         if style != .steel && style != .track && hi {
             steer.box(center: frontAxle + V3(-0.07, 0.055, 0.035), size: V3(0.022, 0.05, 0.06), material: M.alloy)
+            // Front brake hose down the left fork leg.
+            tube([crown + V3(-0.03, -0.012, -0.03), frontAxle + V3(-0.06, 0.22, -0.012), frontAxle + V3(-0.066, 0.09, 0.02)],
+                 up: V3(0, 0, -1), section: round(0.0027, 0.0027), material: plain(M.black), into: &steer)
         }
         if style == .steel {
             // Front rim-brake calliper arching over the tyre.
@@ -376,6 +385,13 @@ public struct BikeModel: Sendable {
                 let lever0 = hoodBase + V3(0, 0.02, -0.088)
                 tube([lever0, lever0 + V3(0, -0.06, -0.012), lever0 + V3(side * 0.006, -0.115, 0.01)], up: V3(0, 0, -1),
                      section: oval(0.012, 0.007, 0.01, 0.006), material: plain(M.black), into: &steer)
+                // Brake hose / gear housing looping from under the bar tape into the head tube.
+                if hi && !isAero {
+                    let entry = headTop + V3(side * 0.012, -0.025, -0.03)
+                    tube([hoodBase + V3(-side * 0.004, -0.012, 0.01), C + V3(side * (hw - 0.03), -0.05, 0.02),
+                          C + V3(side * 0.07, -0.09, 0.03), entry + V3(0, 0.03, -0.07), entry], up: V3(0, 0, -1),
+                         section: round(0.0027, 0.0027), material: plain(M.black), into: &steer)
+                }
             }
             // Centre bar section (left end to right end through the stem).
             tube([C + V3(-0.1, 0, 0), C + V3(0.1, 0, 0)], up: V3(0, 1, 0), section: round(0.0159, 0.0159), material: plain(M.carbon), into: &steer)

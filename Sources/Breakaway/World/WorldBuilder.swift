@@ -205,6 +205,8 @@ enum WorldBuilder {
     }
 
     private static let groundDetail = ProceduralTextures.groundDetail()
+    private static let asphaltNormal = ProceduralTextures.normalMap(size: 256, scale: 32, strength: 3.0, seed: 8)
+    private static let cobbleNormal = ProceduralTextures.normalMap(fromHeight: ProceduralTextures.cobbles(), strength: 2.5)
     private static let groundNormal = ProceduralTextures.normalMap(size: 256, scale: 8, strength: 2.5, seed: 4)
 
     /// Texture coordinates into the route's satellite image (north up).
@@ -421,6 +423,13 @@ enum WorldBuilder {
         m.diffuse.wrapT = .repeat
         m.diffuse.mipFilter = .linear
         m.diffuse.maxAnisotropy = 16
+        // Aggregate / sett relief catching the low sun.
+        m.normal.contents = surface == .cobbles ? cobbleNormal : asphaltNormal
+        m.normal.wrapS = .repeat
+        m.normal.wrapT = .repeat
+        m.normal.mipFilter = .linear
+        m.normal.intensity = surface == .cobbles ? 1.0 : 0.6
+        m.normal.contentsTransform = surface == .cobbles ? SCNMatrix4MakeScale(1, 1, 1) : SCNMatrix4MakeScale(4, 4, 1)
         return m
     }
 
