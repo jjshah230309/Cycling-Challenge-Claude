@@ -685,10 +685,11 @@ enum SceneryTextures {
 
     /// One window bay (3 m) × one storey (3 m) of facade, tinted by the wall's vertex colour.
     static func facade(_ style: Scenery.HouseStyle) -> CGImage {
-        let n = 256
+        let n = 512
         let ctx = ProceduralTextures.context(n, n)
         let N = CGFloat(n)
         func px(_ m: CGFloat) -> CGFloat { m / 3 * N }
+        let k = N / 256                       // pixel sizes below were authored at 256 px
         // Wall surface.
         switch style {
         case .brick:
@@ -698,13 +699,13 @@ enum SceneryTextures {
             var y: CGFloat = 0
             var row = 0
             while y < N {
-                ctx.fill(CGRect(x: 0, y: y, width: N, height: 1.5))
-                var x: CGFloat = row % 2 == 0 ? 0 : 9
+                ctx.fill(CGRect(x: 0, y: y, width: N, height: 1.5 * k))
+                var x: CGFloat = row % 2 == 0 ? 0 : 9 * k
                 while x < N {
-                    ctx.fill(CGRect(x: x, y: y, width: 1.5, height: 6))
-                    x += 18
+                    ctx.fill(CGRect(x: x, y: y, width: 1.5 * k, height: 6 * k))
+                    x += 18 * k
                 }
-                y += 6
+                y += 6 * k
                 row += 1
             }
         case .chalet:
@@ -716,8 +717,8 @@ enum SceneryTextures {
             ctx.setFillColor(ProceduralTextures.cg(0x6E4527))
             var y = N * 0.45
             while y < N {
-                ctx.fill(CGRect(x: 0, y: y, width: N, height: 2))
-                y += 10
+                ctx.fill(CGRect(x: 0, y: y, width: N, height: 2 * k))
+                y += 10 * k
             }
         default:
             ctx.setFillColor(CGColor(gray: 0.97, alpha: 1))
@@ -725,7 +726,7 @@ enum SceneryTextures {
             var r = SceneRandom(seed: 77)
             for _ in 0..<500 {
                 ctx.setFillColor(CGColor(gray: r.chance(0.5) ? 0.9 : 1, alpha: 0.4))
-                ctx.fill(CGRect(x: r.range(0, Double(N)), y: r.range(0, Double(N)), width: 3, height: 3))
+                ctx.fill(CGRect(x: r.range(0, Double(N)), y: r.range(0, Double(N)), width: 3 * k, height: 3 * k))
             }
         }
         // Window.
@@ -738,8 +739,8 @@ enum SceneryTextures {
         ctx.setFillColor(CGColor(gray: 1, alpha: 0.18))
         ctx.fill(CGRect(x: win.minX, y: win.midY, width: win.width, height: win.height / 2))   // sky reflection
         ctx.setFillColor(CGColor(gray: 0.92, alpha: 1))
-        ctx.fill(CGRect(x: win.midX - 2, y: win.minY, width: 4, height: win.height))
-        ctx.fill(CGRect(x: win.minX, y: win.midY - 2, width: win.width, height: 4))
+        ctx.fill(CGRect(x: win.midX - 2 * k, y: win.minY, width: 4 * k, height: win.height))
+        ctx.fill(CGRect(x: win.minX, y: win.midY - 2 * k, width: win.width, height: 4 * k))
         // Shutters.
         let shutter: UInt32?
         switch style {
@@ -753,22 +754,22 @@ enum SceneryTextures {
             ctx.fill(CGRect(x: win.minX - px(0.5), y: win.minY, width: px(0.45), height: win.height))
             ctx.fill(CGRect(x: win.maxX + px(0.05), y: win.minY, width: px(0.45), height: win.height))
             ctx.setFillColor(CGColor(gray: 0, alpha: 0.25))
-            var y = win.minY + 4
+            var y = win.minY + 4 * k
             while y < win.maxY {
-                ctx.fill(CGRect(x: win.minX - px(0.5), y: y, width: px(0.45), height: 1.5))
-                ctx.fill(CGRect(x: win.maxX + px(0.05), y: y, width: px(0.45), height: 1.5))
-                y += 7
+                ctx.fill(CGRect(x: win.minX - px(0.5), y: y, width: px(0.45), height: 1.5 * k))
+                ctx.fill(CGRect(x: win.maxX + px(0.05), y: y, width: px(0.45), height: 1.5 * k))
+                y += 7 * k
             }
         }
         if style == .apartment {
             // Balcony railing below the window.
             ctx.setFillColor(CGColor(gray: 0.25, alpha: 1))
-            ctx.fill(CGRect(x: px(0.6), y: px(0.55), width: px(1.8), height: 3))
-            ctx.fill(CGRect(x: px(0.6), y: px(0.1), width: px(1.8), height: 3))
+            ctx.fill(CGRect(x: px(0.6), y: px(0.55), width: px(1.8), height: 3 * k))
+            ctx.fill(CGRect(x: px(0.6), y: px(0.1), width: px(1.8), height: 3 * k))
             var x = px(0.6)
             while x < px(2.4) {
-                ctx.fill(CGRect(x: x, y: px(0.1), width: 2, height: px(0.45)))
-                x += 8
+                ctx.fill(CGRect(x: x, y: px(0.1), width: 2 * k, height: px(0.45)))
+                x += 8 * k
             }
         }
         return ctx.makeImage()!
