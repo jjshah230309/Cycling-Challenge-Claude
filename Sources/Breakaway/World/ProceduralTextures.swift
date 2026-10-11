@@ -77,35 +77,88 @@ enum ProceduralTextures {
         return ctx.makeImage()!
     }
 
+    /// Pavé: irregular, rounded granite setts in uneven courses, with dark joints, the odd
+    /// sunken or proud stone and moss towards the crown-less edges.
     static func cobbles() -> CGImage {
-        let w = 512, h = 512
+        let w = 1024, h = 1024
         let ctx = context(w, h)
         let W = CGFloat(w), H = CGFloat(h)
         ctx.setFillColor(cg(0x6F6450))
         ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
-        speckle(ctx, w: w, h: h, count: 3000, colors: [0x5C6E3E, 0x7D6E52, 0x4F4535], size: 1...5, alpha: 0.5...1, seed: 7)
+        speckle(ctx, w: w, h: h, count: 12000, colors: [0x5C6E3E, 0x7D6E52, 0x4F4535], size: 1...6, alpha: 0.5...1, seed: 7)
         let road = CGRect(x: W * verge * 0.6, y: 0, width: W * (1 - 1.2 * verge), height: H)
-        ctx.setFillColor(cg(0x4B443A))
+        ctx.setFillColor(cg(0x2E2A24))
         ctx.fill(road)
+        speckle(ctx, w: w, h: h, count: 6000, colors: [0x3A352C, 0x24211C, 0x4A4234], size: 1...4, alpha: 0.6...1, seed: 8, rect: road)
         var r = SceneRandom(seed: 11)
-        let stone: CGFloat = W / 11 * 0.16   // ~16 cm setts
+        let stone: CGFloat = W / 11 * 0.15                // ~15 cm setts
+        let greys: [UInt32] = [0x8C8478, 0x7A7368, 0x9C9284, 0x6B655C, 0x857A6A, 0x77706A, 0x938B7E, 0x5F5A52]
         var y: CGFloat = 0
-        var row = 0
         while y < H {
-            var x = road.minX + (row % 2 == 0 ? 0 : stone / 2)
+            let rowH = stone * CGFloat(r.range(0.8, 1.05))
+            var x = road.minX - CGFloat(r.range(0, Double(stone)))
             while x < road.maxX {
-                let shade = [0x8C8478, 0x7A7368, 0x9C9284, 0x6B655C, 0x857A6A][Int(r.unit() * 5)]
-                ctx.setFillColor(cg(UInt32(shade)))
-                let jitter = CGFloat(r.range(-1.5, 1.5))
-                let rect = CGRect(x: x + 1.5 + jitter, y: y + 1.5, width: stone - 3, height: stone * 0.9 - 3)
-                ctx.addPath(CGPath(roundedRect: rect, cornerWidth: 3, cornerHeight: 3, transform: nil))
+                let sw = stone * CGFloat(r.range(0.75, 1.3))
+                let rect = CGRect(x: x + 2.5, y: y + 2.5, width: sw - 5, height: rowH - 5)
+                    .offsetBy(dx: CGFloat(r.range(-1.5, 1.5)), dy: CGFloat(r.range(-1.5, 1.5)))
+                let base = r.pick(greys)
+                ctx.setFillColor(cg(base))
+                ctx.addPath(CGPath(roundedRect: rect, cornerWidth: rect.width * 0.32, cornerHeight: rect.height * 0.32, transform: nil))
                 ctx.fillPath()
-                ctx.setFillColor(cg(0xFFFFFF, 0.08))
-                ctx.fill(CGRect(x: rect.minX + 2, y: rect.maxY - 4, width: rect.width - 4, height: 2))
-                x += stone
+                // Worn, polished crown and a darker lower edge.
+                ctx.setFillColor(cg(0xFFFFFF, CGFloat(r.range(0.05, 0.14))))
+                ctx.fillEllipse(in: rect.insetBy(dx: rect.width * 0.2, dy: rect.height * 0.25).offsetBy(dx: 0, dy: rect.height * 0.08))
+                ctx.setFillColor(cg(0x000000, 0.18))
+                ctx.fill(CGRect(x: rect.minX + 3, y: rect.minY, width: rect.width - 6, height: rect.height * 0.18))
+                // Grain.
+                for _ in 0..<5 {
+                    ctx.setFillColor(cg(r.chance(0.5) ? 0x4A453F : 0xB8AFA2, 0.35))
+                    ctx.fillEllipse(in: CGRect(x: rect.minX + CGFloat(r.range(0, Double(rect.width))), y: rect.minY + CGFloat(r.range(0, Double(rect.height))),
+                                               width: 2.5, height: 2.5))
+                }
+                if r.chance(0.04) {
+                    ctx.setFillColor(cg(0x4F6A2E, 0.6))       // moss in a wide joint
+                    ctx.fillEllipse(in: CGRect(x: rect.maxX - 4, y: rect.minY, width: 8, height: rect.height))
+                }
+                x += sw
             }
-            y += stone * 0.9
-            row += 1
+            y += rowH
+        }
+        return ctx.makeImage()!
+    }
+
+    /// Metre-scale ground texture multiplied over satellite imagery: grass clumps, bare
+    /// patches and pebbles (values ≤ 1; the imagery is brightened to compensate).
+    static func groundClumps() -> CGImage {
+        let n = 512
+        let ctx = context(n, n)
+        let N = Double(n)
+        ctx.setFillColor(CGColor(gray: 0.86, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: n, height: n))
+        var r = SceneRandom(seed: 61)
+        // Broad light/dark patches (wrapping).
+        for _ in 0..<160 {
+            let s = r.range(30, 110)
+            let x = r.range(0, N), y = r.range(0, N)
+            ctx.setFillColor(CGColor(gray: r.chance(0.5) ? 1.0 : 0.72, alpha: 0.18))
+            for dx in [-N, 0, N] { for dy in [-N, 0, N] { ctx.fillEllipse(in: CGRect(x: x + dx, y: y + dy, width: s, height: s * 0.8)) } }
+        }
+        // Grass strokes.
+        ctx.setLineCap(.round)
+        for _ in 0..<9000 {
+            let x = r.range(0, N), y = r.range(0, N)
+            let a = r.range(0, 2 * .pi), len = r.range(3, 9)
+            ctx.setStrokeColor(CGColor(gray: r.chance(0.5) ? 1.0 : 0.62, alpha: 0.35))
+            ctx.setLineWidth(1.3)
+            ctx.move(to: CGPoint(x: x, y: y))
+            ctx.addLine(to: CGPoint(x: x + cos(a) * len, y: y + sin(a) * len))
+            ctx.strokePath()
+        }
+        // Pebbles.
+        for _ in 0..<500 {
+            let s = r.range(2, 5)
+            ctx.setFillColor(CGColor(gray: r.chance(0.6) ? 1.0 : 0.55, alpha: 0.5))
+            ctx.fillEllipse(in: CGRect(x: r.range(0, N), y: r.range(0, N), width: s, height: s * 0.8))
         }
         return ctx.makeImage()!
     }

@@ -43,7 +43,7 @@ enum WorldBuilder {
         let ambient = SCNNode()
         ambient.light = SCNLight()
         ambient.light?.type = .ambient
-        ambient.light?.intensity = 260
+        ambient.light?.intensity = 430
         ambient.light?.color = NSColor(srgbRed: 0.75, green: 0.82, blue: 0.95, alpha: 1)
         root.addChildNode(ambient)
 
@@ -84,10 +84,10 @@ enum WorldBuilder {
 
     static func setupEnvironment(scene: SCNScene, biome: RouteRecord.Biome, terrain: TerrainModel) {
         // Physically based clear-sky model (Hosek–Wilkie via ModelIO) for background and image-based light.
-        let turbidity: Float = biome == .urban || biome == .countryside ? 0.45 : 0.28
+        let turbidity: Float = biome == .urban || biome == .countryside ? 0.7 : 0.55
         let sky = MDLSkyCubeTexture(name: "sky", channelEncoding: .uInt8, textureDimensions: vector_int2(512, 512),
                                     turbidity: turbidity, sunElevation: asin(sunDirection.y) / (.pi / 2),
-                                    upperAtmosphereScattering: 0.32, groundAlbedo: 0.3)
+                                    upperAtmosphereScattering: 0.55, groundAlbedo: 0.35)
         sky.sunAzimuth = atan2(sunDirection.x, sunDirection.z)
         if let cube = sky.imageFromTexture()?.takeUnretainedValue() {
             scene.background.contents = cube
@@ -205,6 +205,7 @@ enum WorldBuilder {
     }
 
     private static let groundDetail = ProceduralTextures.groundDetail()
+    private static let drapedDetail = ProceduralTextures.groundClumps()
     private static let asphaltNormal = ProceduralTextures.normalMap(size: 256, scale: 32, strength: 3.0, seed: 8)
     private static let cobbleNormal = ProceduralTextures.normalMap(fromHeight: ProceduralTextures.cobbles(), strength: 2.5)
     private static let groundNormal = ProceduralTextures.normalMap(size: 256, scale: 8, strength: 2.5, seed: 4)
@@ -234,11 +235,14 @@ enum WorldBuilder {
         m.diffuse.maxAnisotropy = 16
         m.diffuse.mappingChannel = 0
         // Channel 1: metre-scale detail so the ground stays crisp up close.
-        m.multiply.contents = groundDetail
+        m.diffuse.intensity = 1.18
+        m.multiply.contents = drapedDetail
         m.multiply.wrapS = .repeat
         m.multiply.wrapT = .repeat
         m.multiply.mipFilter = .linear
+        m.multiply.maxAnisotropy = 8
         m.multiply.mappingChannel = 1
+        m.multiply.contentsTransform = SCNMatrix4MakeScale(5, 5, 1)
         m.normal.contents = groundNormal
         m.normal.wrapS = .repeat
         m.normal.wrapT = .repeat
@@ -284,7 +288,8 @@ enum WorldBuilder {
                 var h = terrain.naturalHeight(x: x, y: y)
                 if let hit = terrain.nearestRoad(x: x, y: y, maxDistance: corridorHole) {
                     near[j * n + i] = true
-                    h = min(h, hit.elevation) - 4
+                    // Tuck the coarse far terrain well under the fine road corridor.
+                    h = min(h, hit.elevation) - 9
                 }
                 // Skirt the outer rim down so the world edge never shows daylight underneath.
                 if i == 0 || j == 0 || i == n - 1 || j == n - 1 { h -= 60 }
@@ -299,7 +304,9 @@ enum WorldBuilder {
         for j in 0..<(n - 1) {
             for i in 0..<(n - 1) {
                 let a = j * n + i, b = a + 1, c = a + n + 1, d = a + n
-                if near[a] || near[b] || near[c] || near[d] { continue }
+                // Keep the far terrain continuous (tucked under the corridor near the road) so
+                // wherever the corridor is trimmed at hairpins there is ground, not a hole.
+                _ = near[a]
                 mesh.addQuad(UInt32(a), UInt32(d), UInt32(c), UInt32(b))
             }
         }

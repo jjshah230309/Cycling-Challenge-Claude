@@ -356,9 +356,10 @@ public enum Scenery {
             m.addVertex(-d * (w / 2) + lean + SIMD3(0, h, 0), n, SIMD2(0, 1))
             m.addIndices([b, b + 1, b + 2, b, b + 2, b + 3], material: Material.grassCard)
         }
-        let tint: SIMD4<Float> = dry ? SIMD4(1.15, 1.0, 0.7, 1) : SIMD4(Float(rng.range(0.9, 1.05)), 1, Float(rng.range(0.9, 1.05)), 1)
+        let shade = Float(rng.range(0.62, 0.9))
+        let tint: SIMD4<Float> = dry ? SIMD4(1.1, 0.98, 0.72, 1) * shade : SIMD4(Float(rng.range(0.85, 1.05)), Float(rng.range(0.85, 1.0)), Float(rng.range(0.7, 0.95)), 1) * shade
         m.colorize { p, _ in
-            let ao: Float = 0.6 + 0.4 * min(1, p.y / 0.4)
+            let ao: Float = 0.5 + 0.5 * min(1, p.y / 0.4)
             return SIMD4(tint.x * ao, tint.y * ao, tint.z * ao, 1)
         }
         return m
