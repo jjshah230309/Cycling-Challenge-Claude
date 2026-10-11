@@ -20,6 +20,10 @@ public struct RiderDimensions: Sendable {
     /// Ankle → cleat (ball of the foot), in foot space.
     public var cleat = SIMD3<Float>(0, 0.115, -0.087)
     public var girth: Float = 1
+    /// Right shoulder joint, right hip joint and the base of the neck in torso-bone space.
+    public var shoulderOffset = SIMD3<Float>(0.185, 0.47, -0.004)
+    public var hipOffset = SIMD3<Float>(0.088, 0, 0)
+    public var neckOffset = SIMD3<Float>(0, 0.525, 0.012)
 
     public init(build: AvatarBuild) {
         switch build {
@@ -28,6 +32,9 @@ public struct RiderDimensions: Sendable {
         case .sprinter: girth = 1.13
         }
         shoulderHalf *= mixf(1, girth, 0.6)
+        shoulderOffset = SIMD3(shoulderHalf, torso * 0.885, -0.004)
+        hipOffset = SIMD3(hipHalf, 0, 0)
+        neckOffset = SIMD3(0, torso - 0.005, 0.012)
     }
 }
 
@@ -35,6 +42,9 @@ public struct RiderDimensions: Sendable {
 public struct RiderModel: Sendable {
     public var segments: [RiderBone: ModelMesh] = [:]
     public let dimensions: RiderDimensions
+    /// The skinned realistic body (torso, arms, legs, neck and face). When set, the torso,
+    /// arm and leg segments are empty and the head segment carries only helmet and glasses.
+    public var body: RiderBody?
 
     public enum Material {
         public static let jersey = "jersey", shorts = "shorts", skin = "skin", helmet = "helmet", lens = "lens"
@@ -43,9 +53,11 @@ public struct RiderModel: Sendable {
     }
 
     // swiftlint:disable:next function_body_length
-    public init(build: AvatarBuild, timeTrialHelmet: Bool = false, detail: Float = 1) {
-        let d = RiderDimensions(build: build)
+    public init(build: AvatarBuild, timeTrialHelmet: Bool = false, detail: Float = 1, realistic: Bool = true) {
+        let realBody = realistic ? RiderBody.shared.withBuild(build) : nil
+        let d = realBody?.dimensions ?? RiderDimensions(build: build)
         dimensions = d
+        body = realBody
         let hi = detail >= 0.75
         let around = hi ? 28 : 8
         let G = d.girth
@@ -101,11 +113,12 @@ public struct RiderModel: Sendable {
         head.ellipsoid(center: skull + V3(0, -0.072, -0.085), radii: V3(0.022, 0.008, 0.01), rings: 3, segments: 8, material: M.lips)
         // Hair below the helmet at the back.
         head.ellipsoid(center: skull + V3(0, -0.01, 0.03), radii: V3(0.079, 0.085, 0.08), rings: hi ? 8 : 4, segments: around, material: M.hair)
+        var gear = ModelMesh()
         // Helmet shell: an open dome, elongated, with a tail (long and pointed for TT).
         let helmetRings = hi ? 18 : 6
         let helmetCols = hi ? 44 : 12
         let hc = skull + V3(0, 0.022, 0.008)
-        head.addGrid(rows: helmetRings + 1, cols: helmetCols, wrap: true, material: { _ in M.helmet }, point: { i, j in
+        gear.addGrid(rows: helmetRings + 1, cols: helmetCols, wrap: true, material: { _ in M.helmet }, point: { i, j in
             // Latitude from the brim (−0.32 rad) to the crown; the brim drops at the back.
             let lat = mixf(-0.32, Float.pi / 2, Float(i) / Float(helmetRings))
             let lon = Float(j) / Float(helmetCols) * 2 * .pi
@@ -122,7 +135,7 @@ public struct RiderModel: Sendable {
             return hc + p
         }, uv: { i, j in V2(Float(j) / Float(helmetCols), Float(i) / Float(helmetRings)) })
         // Underside of the shell (black liner) so the dome never looks paper-thin.
-        head.addGrid(rows: 2, cols: helmetCols, wrap: true, material: { _ in M.black }, point: { i, j in
+        gear.addGrid(rows: 2, cols: helmetCols, wrap: true, material: { _ in M.black }, point: { i, j in
             let lon = -Float(j) / Float(helmetCols) * 2 * .pi
             let lat: Float = -0.32
             var p = V3(cos(lat) * cos(lon), sin(lat), -cos(lat) * sin(lon))
@@ -139,7 +152,7 @@ public struct RiderModel: Sendable {
                 let a = mixf(-1.15, 1.15, Float(k) / Float(hi ? 12 : 6))
                 return skull + V3(sin(a) * 0.095, 0.022, -cos(a) * 0.108)
             }
-            head.loft(path: visor, up: V3(0, 1, 0), section: { _, _ in Section.superellipse(0.004, 0.06, exponent: 4, count: 8) },
+            gear.loft(path: visor, up: V3(0, 1, 0), section: { _, _ in Section.superellipse(0.004, 0.06, exponent: 4, count: 8) },
                       material: { _ in M.lens }, capStart: true, capEnd: true)
         } else {
             // Wraparound sunglasses with arms back to the ears.
@@ -147,17 +160,27 @@ public struct RiderModel: Sendable {
                 let a = mixf(-1.2, 1.2, Float(k) / Float(hi ? 14 : 6))
                 return skull + V3(sin(a) * 0.086, 0.012 - 0.008 * abs(a), -cos(a) * 0.097)
             }
-            head.loft(path: lens, up: V3(0, 1, 0), section: { _, _ in Section.superellipse(0.004, 0.042, exponent: 3, count: 8) },
+            gear.loft(path: lens, up: V3(0, 1, 0), section: { _, _ in Section.superellipse(0.004, 0.042, exponent: 3, count: 8) },
                       material: { _ in M.lens }, capStart: true, capEnd: true)
             for s: Float in [-1, 1] {
-                head.tube(path: [skull + V3(s * 0.083, 0.02, -0.03), skull + V3(s * 0.082, 0.012, 0.03)], radius: { _ in 0.003 },
+                gear.tube(path: [skull + V3(s * 0.083, 0.02, -0.03), skull + V3(s * 0.082, 0.012, 0.03)], radius: { _ in 0.003 },
                           sides: 4, material: M.black)
                 // Chin straps.
-                head.tube(path: [hc + V3(s * 0.098, -0.03, -0.04), skull + V3(s * 0.05, -0.1, -0.03)], radius: { _ in 0.0025 },
+                gear.tube(path: [hc + V3(s * 0.098, -0.03, -0.04), skull + V3(s * 0.05, -0.1, -0.03)], radius: { _ in 0.0025 },
                           sides: 4, material: M.black)
-                head.tube(path: [hc + V3(s * 0.096, -0.035, 0.04), skull + V3(s * 0.05, -0.1, -0.03)], radius: { _ in 0.0025 },
+                gear.tube(path: [hc + V3(s * 0.096, -0.035, 0.04), skull + V3(s * 0.05, -0.1, -0.03)], radius: { _ in 0.0025 },
                           sides: 4, material: M.black)
             }
+        }
+        if let realBody {
+            // Fit helmet, glasses and straps to the realistic head: centre them on its cranium
+            // (a little behind and above the face's bounding-box centre) and scale to its width.
+            let cranium = realBody.skullCentre + V3(0, 0.012, 0.014)
+            let k = realBody.skullRadii.x / 0.082
+            head = ModelMesh()
+            head.append(gear.transformed(.translation(-skull)), transform: .translation(cranium), scale: V3(k, k, k))
+        } else {
+            head.append(gear)
         }
         segments[.head] = head
 
@@ -188,6 +211,8 @@ public struct RiderModel: Sendable {
         // thumb on the inside; fingerless gloves leave the fingertips bare.
         func hand(_ side: Float) -> ModelMesh {
             var h = ModelMesh()
+            h.tube(path: [V3(0, -0.035, 0.002), V3(0, 0.02, 0.003)], radius: { t in mixf(0.034, 0.037, t) }, sides: hi ? 14 : 6,
+                   material: M.glove)                 // cuff over the wrist
             h.ellipsoid(center: V3(0, 0.045, 0.004), radii: V3(0.042, 0.055, 0.018), rings: hi ? 8 : 4, segments: hi ? 14 : 6, material: M.glove)
             guard hi else { return h }
             for f in 0..<4 {
@@ -240,6 +265,16 @@ public struct RiderModel: Sendable {
         shoe.box(center: V3(0, 0.115, -0.081), size: V3(0.07, 0.009, 0.075), material: M.black)    // cleat
         shoe.ellipsoid(center: V3(0, 0, 0.005), radii: V3(0.036, 0.04, 0.036), rings: 4, segments: 8, material: M.sock)
 
+        if realBody != nil {
+            for bone in [RiderBone.torso, .upperArmL, .upperArmR, .forearmL, .forearmR, .thighL, .thighR, .shinL, .shinR] {
+                segments[bone] = ModelMesh()
+            }
+            segments[.handL] = hand(-1)
+            segments[.handR] = hand(1)
+            segments[.footL] = shoe
+            segments[.footR] = shoe
+            return
+        }
         segments[.upperArmL] = ua
         segments[.upperArmR] = ua
         segments[.forearmL] = fa
@@ -341,7 +376,9 @@ public struct RiderPose: Sendable {
             top.x += sin(roll) * 0.35 * 0.9
             return .bone(from: hip, to: top, side: X)
         }
-        func shoulder(_ t: RigidTransform, _ side: Float) -> V3 { t.apply(V3(side * d.shoulderHalf, d.torso * 0.885, -0.004)) }
+        func shoulder(_ t: RigidTransform, _ side: Float) -> V3 {
+            t.apply(V3(side * d.shoulderOffset.x, d.shoulderOffset.y, d.shoulderOffset.z))
+        }
         let (targetPoint, targetDist): (V3, Float) = {
             if let pad = padR { return (pad + V3(0, 0.03, 0), d.upperArm * 0.98) }
             return (gripR, armLength * p.reach)
@@ -357,7 +394,7 @@ public struct RiderPose: Sendable {
         pose.bones[.torso] = torso
 
         // Head: on top of the neck, tilted to keep the eyes on the road.
-        let neck = torso.apply(V3(0, d.torso - 0.005, 0.012))
+        let neck = torso.apply(d.neckOffset)
         let headUp = V3(0, cos(p.headPitch), -sin(p.headPitch))
         let headBase = neck
         pose.bones[.head] = RigidTransform(origin: headBase, x: X, y: headUp, z: X.crossp(headUp))
@@ -393,7 +430,7 @@ public struct RiderPose: Sendable {
             // Cleat sits on the pedal's top face (half the body thickness above the spindle).
             let contact = spindle + foot0.z * 0.009 + V3(side * (a.pedalStance - 0.078), 0, 0)
             let ankle = contact - foot0.rotate(d.cleat)
-            let hipJoint = torso.apply(V3(side * d.hipHalf, 0, 0))
+            let hipJoint = torso.apply(V3(side * d.hipOffset.x, d.hipOffset.y, d.hipOffset.z))
             let knee = RiderPose.twoBone(root: hipJoint, target: ankle, l1: d.thigh, l2: d.shin, pole: V3(side * 0.12, 0.25, -1))
             let thigh: RiderBone = side > 0 ? .thighR : .thighL
             let shin: RiderBone = side > 0 ? .shinR : .shinL

@@ -32,7 +32,7 @@ final class RiderNode: SCNNode {
         anchors = bike.model.anchors
         let tt = state.bike.frame.style == .timeTrial
         let number = state.isPlayer ? 1 : (Int(state.id.filter(\.isNumber)) ?? 0) + 2
-        let (rider, bodyGeometry) = ModelGeometry.rider(build: state.build, timeTrial: tt, kit: state.kit, number: number)
+        let (rider, bodyGeometry, skinned) = ModelGeometry.rider(build: state.build, timeTrial: tt, kit: state.kit, number: number)
         dimensions = rider.dimensions
         params = PoseParameters.target(state.posture, anchors: anchors)
         super.init()
@@ -69,6 +69,17 @@ final class RiderNode: SCNNode {
             model.addChildNode(n)
         }
         applyPose(crankAngle: state.crankAngle)
+        // Realistic body: skinned on the GPU to the same bone nodes the pose solver drives.
+        if let skinned {
+            let skinner = SCNSkinner(baseGeometry: skinned.geometry, bones: RiderBone.allCases.map { bones[$0]! },
+                                     boneInverseBindTransforms: skinned.inverseBind, boneWeights: skinned.weights,
+                                     boneIndices: skinned.indices)
+            skinner.skeleton = model
+            let bodyNode = SCNNode(geometry: skinned.geometry)
+            bodyNode.name = "body"
+            bodyNode.skinner = skinner
+            model.addChildNode(bodyNode)
+        }
 
         if showTag {
             let t = RiderNode.nameTag(state.name, pacer: state.isPacer)

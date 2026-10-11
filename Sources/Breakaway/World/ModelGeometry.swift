@@ -93,12 +93,32 @@ enum ModelGeometry {
 
     // MARK: - Riders
 
-    private static var riderCache: [String: (model: RiderModel, bones: [RiderBone: SCNGeometry])] = [:]
+    /// The realistic skinned body for one rider: geometry plus the skin binding.
+    struct SkinnedBody {
+        let geometry: SCNGeometry
+        let weights: SCNGeometrySource
+        let indices: SCNGeometrySource
+        let inverseBind: [NSValue]
+    }
 
-    /// Rider body geometry (shared buffers) recoloured for a kit.
-    static func rider(build: AvatarBuild, timeTrial: Bool, kit: Kit, number: Int) -> (RiderModel, [RiderBone: SCNGeometry]) {
+    private struct RiderBase {
+        let model: RiderModel
+        let bones: [RiderBone: SCNGeometry]
+        let body: (geometry: SCNGeometry, weights: SCNGeometrySource, indices: SCNGeometrySource, inverseBind: [NSValue])?
+    }
+
+    private static var riderCache: [String: RiderBase] = [:]
+
+    static func matrix(_ t: RigidTransform) -> simd_float4x4 {
+        simd_float4x4(columns: (SIMD4(t.x, 0), SIMD4(t.y, 0), SIMD4(t.z, 0), SIMD4(t.origin, 1)))
+    }
+
+    /// Rider geometry (shared buffers) recoloured for a kit: rigid parts per bone (helmet,
+    /// gloves, shoes) and, for the realistic rider, the skinned body.
+    static func rider(build: AvatarBuild, timeTrial: Bool, kit: Kit, number: Int)
+        -> (model: RiderModel, bones: [RiderBone: SCNGeometry], body: SkinnedBody?) {
         let key = "\(build.rawValue)/\(timeTrial)"
-        let base: (model: RiderModel, bones: [RiderBone: SCNGeometry])
+        let base: RiderBase
         if let b = riderCache[key] {
             base = b
         } else {
@@ -110,15 +130,38 @@ enum ModelGeometry {
                 return m
             }
             var bones: [RiderBone: SCNGeometry] = [:]
-            for bone in RiderBone.allCases {
+            for bone in RiderBone.allCases where hi.segments[bone]!.vertexCount > 0 {
                 bones[bone] = withLOD(high: geometry(hi.segments[bone]!, material: placeholder),
                                       low: geometry(lo.segments[bone]!, material: placeholder), distance: 16)
             }
-            base = (hi, bones)
+            var body: (SCNGeometry, SCNGeometrySource, SCNGeometrySource, [NSValue])?
+            if let b = hi.body {
+                // Four influences per vertex (the fourth is always zero) for the GPU skinner.
+                var w = [Float](), idx = [UInt16]()
+                w.reserveCapacity(b.boneWeights.count * 4)
+                idx.reserveCapacity(b.boneWeights.count * 4)
+                for (bw, bi) in zip(b.boneWeights, b.boneIndices) {
+                    w += [bw.x, bw.y, bw.z, 0]
+                    idx += [UInt16(bi.x), UInt16(bi.y), UInt16(bi.z), 0]
+                }
+                let ws = SCNGeometrySource(data: w.withUnsafeBufferPointer { Data(buffer: $0) }, semantic: .boneWeights,
+                                           vectorCount: b.boneWeights.count, usesFloatComponents: true, componentsPerVector: 4,
+                                           bytesPerComponent: 4, dataOffset: 0, dataStride: 16)
+                let isrc = SCNGeometrySource(data: idx.withUnsafeBufferPointer { Data(buffer: $0) }, semantic: .boneIndices,
+                                             vectorCount: b.boneIndices.count, usesFloatComponents: false, componentsPerVector: 4,
+                                             bytesPerComponent: 2, dataOffset: 0, dataStride: 8)
+                let inv = b.restFrames.map { NSValue(scnMatrix4: SCNMatrix4(matrix($0.inverse))) }
+                body = (geometry(b.mesh, material: placeholder), ws, isrc, inv)
+            }
+            base = RiderBase(model: hi, bones: bones, body: body)
             riderCache[key] = base
         }
         let mats = KitMaterials(kit: kit, number: number, timeTrial: timeTrial)
-        return (base.model, base.bones.mapValues { recoloured($0, material: mats.material) })
+        let body = base.body.map {
+            SkinnedBody(geometry: recoloured($0.geometry, material: mats.material), weights: $0.weights, indices: $0.indices,
+                        inverseBind: $0.inverseBind)
+        }
+        return (base.model, base.bones.mapValues { recoloured($0, material: mats.material) }, body)
     }
 }
 

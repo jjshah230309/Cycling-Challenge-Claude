@@ -83,11 +83,14 @@ final class ModelTests: XCTestCase {
 
     func testRiderPosesAreAnatomicallySane() {
         for build in AvatarBuild.allCases {
-            let rider = RiderModel(build: build)
+            let rider = RiderModel(build: build, realistic: false)
             for (bone, mesh) in rider.segments { assertValid(mesh, "\(build)/\(bone)") }
+            let real = RiderModel(build: build)
+            for (bone, mesh) in real.segments where mesh.vertexCount > 0 { assertValid(mesh, "realistic \(build)/\(bone)") }
+            assertValid(real.body!.mesh, "realistic \(build) body")
             XCTAssertEqual(Set(rider.segments.keys), Set(RiderBone.allCases))
         }
-        let d = RiderDimensions(build: .regular)
+        let d = RiderModel(build: .regular).dimensions
         for frame in Garage.frames {
             let bike = BikeModel(setup: BikeSetup(frameID: frame.id), detail: 0.4)
             let postures: [RiderPosture] = frame.style == .timeTrial ? [.aero, .hoods, .standing] : [.hoods, .drops, .tuck, .standing]
@@ -124,7 +127,7 @@ final class ModelTests: XCTestCase {
 
     func testTorsoAngleFollowsPosture() {
         let bike = BikeModel(setup: BikeSetup(frameID: "summit"), detail: 0.4)
-        let d = RiderDimensions(build: .regular)
+        let d = RiderModel(build: .regular).dimensions
         func torsoAngle(_ p: RiderPosture) -> Float {
             let pose = RiderPose.solve(params: .target(p, anchors: bike.anchors), anchors: bike.anchors, dimensions: d, crankAngle: 0)
             let y = pose.bones[.torso]!.y
@@ -166,6 +169,7 @@ final class ModelTests: XCTestCase {
             all.append(bike.pedalRight, transform: pose.pedalRight)
             all.append(bike.pedalLeft, transform: pose.pedalLeft)
             for (bone, t) in pose.bones { all.append(r.segments[bone]!, transform: t) }
+            if let body = r.body { all.append(body.posed(pose)) }
             try all.objText(name: name).write(to: url.appendingPathComponent("\(name).obj"), atomically: true, encoding: .utf8)
             print("exported \(name): \(all.triangleCount) triangles")
         }
@@ -251,5 +255,38 @@ final class ModelTests: XCTestCase {
             houses.append(Scenery.grassTuft(seed: UInt64(k), flowers: k % 5 == 0), transform: .translation(SIMD3(Float(k % 8) * 0.4 - 12, 0, 9 + Float(k / 8) * 0.4)))
         }
         try houses.objText(name: "houses").write(to: url.appendingPathComponent("houses.obj"), atomically: true, encoding: .utf8)
+    }
+
+    func testRealisticBodySkinsCleanly() throws {
+        let body = RiderBody.shared
+        assertValid(body.mesh, "body")
+        XCTAssertGreaterThan(body.mesh.vertexCount, 5000)
+        XCTAssertEqual(Set(body.mesh.materials), ["jersey", "sleeve", "shorts", "sock", "skin", "hair"])
+        // Proportions of a ~1.78 m adult.
+        let d = body.dimensions
+        XCTAssertEqual(d.thigh, 0.43, accuracy: 0.04)
+        XCTAssertEqual(d.shin, 0.44, accuracy: 0.04)
+        XCTAssertEqual(d.upperArm + d.forearm, 0.56, accuracy: 0.07)
+        XCTAssertEqual(d.torso, 0.57, accuracy: 0.06)
+        for w in body.boneWeights { XCTAssertEqual(w.x + w.y + w.z, 1, accuracy: 0.02) }
+        // Skinning with the rest pose reproduces the rest mesh.
+        var rest = RiderPose()
+        for (k, bone) in RiderBone.allCases.enumerated() { rest.bones[bone] = body.restFrames[k] }
+        let same = body.posed(rest)
+        for i in stride(from: 0, to: body.mesh.vertexCount, by: 97) {
+            XCTAssertEqual((same.positions[i] - body.mesh.positions[i]).norm, 0, accuracy: 1e-4)
+        }
+        // On the bike: the body stays in one piece (no vertex flies off) and sits on the saddle.
+        let bike = BikeModel(setup: BikeSetup(frameID: "allroad"), detail: 0.4)
+        let rider = RiderModel(build: .regular)
+        let pose = RiderPose.solve(params: .target(.hoods, anchors: bike.anchors), anchors: bike.anchors,
+                                   dimensions: rider.dimensions, crankAngle: 1)
+        let posed = rider.body!.posed(pose)
+        let b = posed.bounds
+        XCTAssertLessThan(b.max.y, 1.75)
+        XCTAssertGreaterThan(b.min.y, 0.05)
+        XCTAssertLessThan(b.max.z - b.min.z, 1.4)
+        XCTAssertLessThan(b.max.x - b.min.x, 0.75)
+        for bone in [RiderBone.torso, .thighL, .upperArmR] { XCTAssertEqual(rider.segments[bone]!.vertexCount, 0) }
     }
 }
