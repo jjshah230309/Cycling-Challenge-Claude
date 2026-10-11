@@ -513,7 +513,13 @@ public final class RideSimulation {
     }
 
     private func advanceAnimation(_ r: inout RiderState, dt: Double) {
-        r.crankAngle = (r.crankAngle + r.cadence / 60 * 2 * .pi * dt).truncatingRemainder(dividingBy: 2 * .pi)
+        if r.cadence > 0 {
+            r.crankAngle = (r.crankAngle + r.cadence / 60 * 2 * .pi * dt).truncatingRemainder(dividingBy: 2 * .pi)
+        } else {
+            // Freewheeling riders bring the cranks level (3 and 9 o'clock).
+            let level = r.crankAngle < .pi ? Double.pi / 2 : 3 * Double.pi / 2
+            r.crankAngle += (level - r.crankAngle) * min(1, dt * 3)
+        }
         r.wheelAngle = (r.wheelAngle + r.speed / 0.336 * dt).truncatingRemainder(dividingBy: 2 * .pi)
     }
 
