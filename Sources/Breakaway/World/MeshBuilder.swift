@@ -30,13 +30,16 @@ struct MeshData {
     var normals: [Float] = []
     var colors: [Float] = []
     var uvs: [Float] = []
+    /// Optional second UV set (texture channel 1), e.g. tiling detail over draped imagery.
+    var uvs2: [Float] = []
     var elements: [[UInt32]] = [[]]
 
     var vertexCount: Int { positions.count / 3 }
 
     @discardableResult
     mutating func addVertex(_ p: SIMD3<Float>, normal n: SIMD3<Float> = SIMD3(0, 1, 0),
-                            color c: SIMD4<Float> = SIMD4(1, 1, 1, 1), uv: SIMD2<Float> = .zero) -> UInt32 {
+                            color c: SIMD4<Float> = SIMD4(1, 1, 1, 1), uv: SIMD2<Float> = .zero, uv2: SIMD2<Float>? = nil) -> UInt32 {
+        if let uv2 { uvs2 += [uv2.x, uv2.y] }
         positions += [p.x, p.y, p.z]
         normals += [n.x, n.y, n.z]
         colors += [c.x, c.y, c.z, c.w]
@@ -91,6 +94,7 @@ struct MeshData {
                                      dataStride: MemoryLayout<Float>.size * components)
         }
         var sources = [source(positions, .vertex, 3), source(normals, .normal, 3), source(uvs, .texcoord, 2)]
+        if uvs2.count == uvs.count { sources.append(source(uvs2, .texcoord, 2)) }
         if includeColors { sources.append(source(colors, .color, 4)) }
         // Drop empty elements (e.g. no cobbled sections) together with their materials.
         var els: [SCNGeometryElement] = []

@@ -155,6 +155,50 @@ enum ProceduralTextures {
         return ctx.makeImage()!
     }
 
+    /// Tileable fair-weather cumulus: white with alpha from thresholded fractal noise,
+    /// shaded slightly grey underneath the thickest parts.
+    static func clouds(size n: Int, seed: UInt64) -> CGImage {
+        var r = SceneRandom(seed: seed)
+        func lattice(_ cells: Int) -> [Double] { (0..<(cells * cells)).map { _ in r.unit() } }
+        let octaves = [4, 8, 16, 32, 64]
+        let lats = octaves.map(lattice)
+        func value(_ l: [Double], _ cells: Int, _ x: Double, _ y: Double) -> Double {
+            let fx = x * Double(cells), fy = y * Double(cells)
+            let x0 = Int(floor(fx)), y0 = Int(floor(fy))
+            let tx = fx - Double(x0), ty = fy - Double(y0)
+            let sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty)
+            func at(_ i: Int, _ j: Int) -> Double { l[((j % cells + cells) % cells) * cells + ((i % cells + cells) % cells)] }
+            let a = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * sx
+            let b = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * sx
+            return a + (b - a) * sy
+        }
+        var pixels = [UInt8](repeating: 0, count: n * n * 4)
+        for j in 0..<n {
+            for i in 0..<n {
+                let x = Double(i) / Double(n), y = Double(j) / Double(n)
+                var v = 0.0, amp = 0.5
+                for (k, cells) in octaves.enumerated() {
+                    v += amp * value(lats[k], cells, x, y)
+                    amp *= 0.5
+                }
+                let cover = max(0, min(1, (v - 0.52) / 0.2))          // ~30 % cloud cover
+                let alpha = cover * cover * (3 - 2 * cover)
+                let shade = 1 - 0.22 * max(0, min(1, (v - 0.6) / 0.25))
+                let k = (j * n + i) * 4
+                let a = UInt8(alpha * 235)
+                // Premultiplied RGBA.
+                let c = UInt8(Double(a) * shade)
+                pixels[k] = c
+                pixels[k + 1] = c
+                pixels[k + 2] = UInt8(min(Double(a), Double(c) * 1.03))
+                pixels[k + 3] = a
+            }
+        }
+        let ctx = CGContext(data: &pixels, width: n, height: n, bitsPerComponent: 8, bytesPerRow: n * 4,
+                            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        return ctx.makeImage()!
+    }
+
     // MARK: Sky
 
     static func sky(biome: RouteRecord.Biome) -> CGImage {

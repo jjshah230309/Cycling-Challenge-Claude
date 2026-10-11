@@ -21,6 +21,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/Breakaway" "$APP/Contents/MacOS/Breakaway"
 cp Sources/Breakaway/Info.plist "$APP/Contents/Info.plist"
+# Satellite imagery draped over each route's terrain.
+cp -R Sources/Breakaway/Resources/Imagery "$APP/Contents/Resources/Imagery"
 
 echo "▸ Drawing app icon…"
 ICONSET=build/AppIcon.iconset

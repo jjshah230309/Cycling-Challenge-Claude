@@ -1,6 +1,7 @@
 import AppKit
 import BreakawayCore
 import Foundation
+import ModelIO
 import SceneKit
 import simd
 
@@ -36,6 +37,7 @@ enum WorldBuilder {
 
         progress(0.05, "Sky & light")
         setupEnvironment(scene: scene, biome: biome, terrain: terrain)
+        root.addChildNode(clouds(terrain: terrain, frame: frame))
         let sun = makeSun()
         root.addChildNode(sun)
         let ambient = SCNNode()
@@ -45,10 +47,12 @@ enum WorldBuilder {
         ambient.light?.color = NSColor(srgbRed: 0.75, green: 0.82, blue: 0.95, alpha: 1)
         root.addChildNode(ambient)
 
-        progress(0.12, "Valleys & mountains (DEM)")
-        root.addChildNode(farTerrain(route: route, terrain: terrain, frame: frame))
+        progress(0.12, "Valleys & mountains (DEM + satellite imagery)")
+        let imagery = TerrainImagery.image(for: route.id)
+        let groundMaterial = terrainMaterial(imagery: imagery)
+        root.addChildNode(farTerrain(route: route, terrain: terrain, frame: frame, material: groundMaterial, draped: imagery != nil))
         progress(0.35, "Hillsides along the road")
-        root.addChildNode(corridorTerrain(route: route, terrain: terrain, frame: frame))
+        root.addChildNode(corridorTerrain(route: route, terrain: terrain, frame: frame, material: groundMaterial, draped: imagery != nil))
         progress(0.55, "Road surface")
         root.addChildNode(road(route: route, terrain: terrain, frame: frame))
         root.addChildNode(SceneryBuilder.roadside(route: route, terrain: terrain, frame: frame))
@@ -73,23 +77,65 @@ enum WorldBuilder {
 
     // MARK: - Environment
 
+    /// Direction *towards* the sun in scene space (x east, y up, −z north): late morning,
+    /// from the south-south-east and ~48° high — the same light the satellite imagery was
+    /// captured under, so the photo's baked shading agrees with the real-time shadows.
+    static let sunDirection = simd_normalize(SIMD3<Float>(0.32, 0.74, 0.59))
+
     static func setupEnvironment(scene: SCNScene, biome: RouteRecord.Biome, terrain: TerrainModel) {
-        let sky = ProceduralTextures.sky(biome: biome)
-        scene.background.contents = sky
-        scene.lightingEnvironment.contents = sky
-        scene.lightingEnvironment.intensity = 1.1
+        // Physically based clear-sky model (Hosek–Wilkie via ModelIO) for background and image-based light.
+        let turbidity: Float = biome == .urban || biome == .countryside ? 0.45 : 0.28
+        let sky = MDLSkyCubeTexture(name: "sky", channelEncoding: .uInt8, textureDimensions: vector_int2(512, 512),
+                                    turbidity: turbidity, sunElevation: asin(sunDirection.y) / (.pi / 2),
+                                    upperAtmosphereScattering: 0.32, groundAlbedo: 0.3)
+        sky.sunAzimuth = atan2(sunDirection.x, sunDirection.z)
+        if let cube = sky.imageFromTexture()?.takeUnretainedValue() {
+            scene.background.contents = cube
+            scene.lightingEnvironment.contents = cube
+        } else {
+            let fallback = ProceduralTextures.sky(biome: biome)
+            scene.background.contents = fallback
+            scene.lightingEnvironment.contents = fallback
+        }
+        scene.lightingEnvironment.intensity = 1.25
+        // Aerial perspective: distant ridges fade into a pale blue haze.
         let size = max(terrain.width, terrain.depth)
-        scene.fogStartDistance = CGFloat(min(2500, size * 0.12))
-        scene.fogEndDistance = CGFloat(max(6000, size * 0.55))
-        scene.fogDensityExponent = 1.4
-        scene.fogColor = biome == .urban ? NSColor(srgbRed: 0.84, green: 0.88, blue: 0.91, alpha: 1)
-            : NSColor(srgbRed: 0.80, green: 0.88, blue: 0.95, alpha: 1)
+        scene.fogStartDistance = CGFloat(min(1200, size * 0.06))
+        scene.fogEndDistance = CGFloat(max(14000, size * 1.1))
+        scene.fogDensityExponent = 1.25
+        scene.fogColor = biome == .urban ? NSColor(srgbRed: 0.80, green: 0.85, blue: 0.90, alpha: 1)
+            : NSColor(srgbRed: 0.74, green: 0.83, blue: 0.93, alpha: 1)
+    }
+
+    /// A layer of fair-weather cumulus high above the route.
+    static func clouds(terrain: TerrainModel, frame: WorldFrame) -> SCNNode {
+        let span = CGFloat(max(terrain.width, terrain.depth) * 3)
+        let plane = SCNPlane(width: span, height: span)
+        let m = SCNMaterial()
+        m.lightingModel = .constant
+        m.diffuse.contents = ProceduralTextures.clouds(size: 1024, seed: 21)
+        m.diffuse.wrapS = .repeat
+        m.diffuse.wrapT = .repeat
+        m.diffuse.contentsTransform = SCNMatrix4MakeScale(span / 9000, span / 9000, 1)
+        m.transparencyMode = .aOne
+        m.writesToDepthBuffer = false
+        m.isDoubleSided = true
+        plane.materials = [m]
+        let node = SCNNode(geometry: plane)
+        node.name = "clouds"
+        node.simdEulerAngles = SIMD3(.pi / 2, 0, 0)          // face down towards the riders
+        node.simdPosition = SIMD3(Float((terrain.minX + terrain.maxX) / 2),
+                                  Float(terrain.highestPoint - frame.baseElevation + 1800),
+                                  Float(-(terrain.minY + terrain.maxY) / 2))
+        node.castsShadow = false
+        node.renderingOrder = -5
+        return node
     }
 
     static func makeSun() -> SCNNode {
         let light = SCNLight()
         light.type = .directional
-        light.intensity = 1350
+        light.intensity = 1500
         light.color = NSColor(srgbRed: 1, green: 0.96, blue: 0.88, alpha: 1)
         light.castsShadow = true
         light.shadowMode = .forward
@@ -105,8 +151,8 @@ enum WorldBuilder {
         let node = SCNNode()
         node.name = "sun"
         node.light = light
-        // Afternoon sun from the south-west, ~40° high.
-        node.simdOrientation = simd_quatf(angle: Float.pi * 0.78, axis: SIMD3(0, 1, 0)) * simd_quatf(angle: -0.70, axis: SIMD3(1, 0, 0))
+        // The light shines along the node's −Z, i.e. away from the sun.
+        node.simdOrientation = simd_quatf(from: SIMD3(0, 0, -1), to: -sunDirection)
         return node
     }
 
@@ -161,6 +207,47 @@ enum WorldBuilder {
     private static let groundDetail = ProceduralTextures.groundDetail()
     private static let groundNormal = ProceduralTextures.normalMap(size: 256, scale: 8, strength: 2.5, seed: 4)
 
+    /// Texture coordinates into the route's satellite image (north up).
+    static func imageryUV(_ terrain: TerrainModel, _ x: Double, _ y: Double) -> SIMD2<Float> {
+        SIMD2(Float((x - terrain.minX) / terrain.width), Float((terrain.maxY - y) / terrain.depth))
+    }
+
+    /// Vertex tint over draped imagery: worn earth verges beside the tarmac and sand at the shore.
+    static func drapedTint(elevation: Double, water: Double?, roadDistance: Double?) -> SIMD4<Float> {
+        var c = SIMD4<Float>(1, 1, 1, 1)
+        if let w = water, elevation < w + 2.5 { c = SceneMath.mix(SceneMath.rgba(0xF2E6C4), c, Float((elevation - w) / 2.5)) }
+        if let rd = roadDistance, rd < 9 { c = SceneMath.mix(SIMD4(0.86, 0.78, 0.64, 1), c, Float((rd - 5.5) / 3.5)) }
+        return c
+    }
+
+    static func terrainMaterial(imagery: CGImage?) -> SCNMaterial {
+        guard let imagery else { return terrainMaterial() }
+        let m = SCNMaterial()
+        m.lightingModel = .lambert
+        // Channel 0: satellite photo over the whole DEM area.
+        m.diffuse.contents = imagery
+        m.diffuse.wrapS = .clamp
+        m.diffuse.wrapT = .clamp
+        m.diffuse.mipFilter = .linear
+        m.diffuse.maxAnisotropy = 16
+        m.diffuse.mappingChannel = 0
+        // Channel 1: metre-scale detail so the ground stays crisp up close.
+        m.multiply.contents = groundDetail
+        m.multiply.wrapS = .repeat
+        m.multiply.wrapT = .repeat
+        m.multiply.mipFilter = .linear
+        m.multiply.mappingChannel = 1
+        m.normal.contents = groundNormal
+        m.normal.wrapS = .repeat
+        m.normal.wrapT = .repeat
+        m.normal.mipFilter = .linear
+        m.normal.intensity = 0.8
+        m.normal.mappingChannel = 1
+        m.normal.contentsTransform = SCNMatrix4MakeScale(3, 3, 1)
+        m.isDoubleSided = true
+        return m
+    }
+
     static func terrainMaterial() -> SCNMaterial {
         let m = SCNMaterial()
         m.lightingModel = .lambert
@@ -182,9 +269,9 @@ enum WorldBuilder {
 
     // MARK: - Far terrain (whole DEM area, coarse, with a hole along the road)
 
-    static func farTerrain(route: Route, terrain: TerrainModel, frame: WorldFrame) -> SCNNode {
+    static func farTerrain(route: Route, terrain: TerrainModel, frame: WorldFrame, material: SCNMaterial, draped: Bool) -> SCNNode {
         let size = max(terrain.width, terrain.depth)
-        let n = max(64, min(240, Int(size / 55)))
+        let n = max(96, min(400, Int(size / 40)))
         var mesh = MeshData()
         var near = [Bool](repeating: false, count: n * n)
         var heights = [Double](repeating: 0, count: n * n)
@@ -200,7 +287,11 @@ enum WorldBuilder {
                 // Skirt the outer rim down so the world edge never shows daylight underneath.
                 if i == 0 || j == 0 || i == n - 1 || j == n - 1 { h -= 60 }
                 heights[j * n + i] = h
-                mesh.addVertex(frame.point(x: x, y: y, elevation: h), uv: SIMD2(Float(x / 23), Float(y / 23)))
+                if draped {
+                    mesh.addVertex(frame.point(x: x, y: y, elevation: h), uv: imageryUV(terrain, x, y), uv2: SIMD2(Float(x / 23), Float(y / 23)))
+                } else {
+                    mesh.addVertex(frame.point(x: x, y: y, elevation: h), uv: SIMD2(Float(x / 23), Float(y / 23)))
+                }
             }
         }
         for j in 0..<(n - 1) {
@@ -216,10 +307,11 @@ enum WorldBuilder {
             let ny = mesh.normals[k * 3 + 1]
             let i = k % n, j = k / n
             let x = terrain.minX + Double(i) * sx, y = terrain.minY + Double(j) * sy
-            let c = groundColor(biome: route.record.biome, elevation: heights[k], slope: 1 - ny, x: x, y: y, water: water, roadDistance: nil)
+            let c = draped ? drapedTint(elevation: heights[k], water: water, roadDistance: nil)
+                : groundColor(biome: route.record.biome, elevation: heights[k], slope: 1 - ny, x: x, y: y, water: water, roadDistance: nil)
             mesh.colors.replaceSubrange((k * 4)..<(k * 4 + 4), with: [c.x, c.y, c.z, c.w])
         }
-        let node = SCNNode(geometry: mesh.geometry(materials: [terrainMaterial()]))
+        let node = SCNNode(geometry: mesh.geometry(materials: [material]))
         node.name = "terrain-far"
         node.castsShadow = false
         return node
@@ -227,7 +319,7 @@ enum WorldBuilder {
 
     // MARK: - Corridor terrain (fine, aligned with the road)
 
-    static func corridorTerrain(route: Route, terrain: TerrainModel, frame: WorldFrame) -> SCNNode {
+    static func corridorTerrain(route: Route, terrain: TerrainModel, frame: WorldFrame, material: SCNMaterial, draped: Bool) -> SCNNode {
         let offsets = corridorOffsets.reversed().map { -$0 } + corridorOffsets
         let cols = offsets.count + 2                       // + skirt on each side
         let step = 6.0
@@ -265,13 +357,15 @@ enum WorldBuilder {
                 rowOwned.append(mine)
                 owned.append(mine)
                 vertexRoadDist.append(hit?.distance)
-                mesh.addVertex(frame.point(q, h), uv: SIMD2(Float(q.x / 23), Float(q.y / 23)))
+                mesh.addVertex(frame.point(q, h), uv: draped ? imageryUV(terrain, q.x, q.y) : SIMD2(Float(q.x / 23), Float(q.y / 23)),
+                               uv2: draped ? SIMD2(Float(q.x / 23), Float(q.y / 23)) : nil)
                 vertexHeights.append(h)
             }
             for (side, o) in [(-1.0, offsets.first!), (1.0, offsets.last!)] {
                 let q = p + right * (o + side * 2)
                 let h = (side < 0 ? rowHeights.first! : rowHeights.last!) - 14
-                mesh.addVertex(frame.point(q, h), uv: SIMD2(Float(q.x / 23), Float(q.y / 23)))
+                mesh.addVertex(frame.point(q, h), uv: draped ? imageryUV(terrain, q.x, q.y) : SIMD2(Float(q.x / 23), Float(q.y / 23)),
+                               uv2: draped ? SIMD2(Float(q.x / 23), Float(q.y / 23)) : nil)
                 vertexHeights.append(h)
                 vertexRoadDist.append(nil)
                 owned.append(side < 0 ? rowOwned.first! : rowOwned.last!)
@@ -301,11 +395,12 @@ enum WorldBuilder {
         for k in 0..<mesh.vertexCount {
             let ny = mesh.normals[k * 3 + 1]
             let x = Double(mesh.positions[k * 3]), y = -Double(mesh.positions[k * 3 + 2])
-            let c = groundColor(biome: route.record.biome, elevation: vertexHeights[k], slope: 1 - abs(ny), x: x, y: y,
-                                water: water, roadDistance: vertexRoadDist[k])
+            let c = draped ? drapedTint(elevation: vertexHeights[k], water: water, roadDistance: vertexRoadDist[k])
+                : groundColor(biome: route.record.biome, elevation: vertexHeights[k], slope: 1 - abs(ny), x: x, y: y,
+                              water: water, roadDistance: vertexRoadDist[k])
             mesh.colors.replaceSubrange((k * 4)..<(k * 4 + 4), with: [c.x, c.y, c.z, c.w])
         }
-        let node = SCNNode(geometry: mesh.geometry(materials: [terrainMaterial()]))
+        let node = SCNNode(geometry: mesh.geometry(materials: [material]))
         node.name = "terrain-corridor"
         return node
     }

@@ -9,6 +9,8 @@ public enum Scenery {
         public static let rock = "rock", grass = "grass"
         public static let wall = "wall", roof = "roof", wood = "wood", trim = "trim", glass = "glass", plinth = "plinth"
         public static let person = "person", vehicle = "vehicle", tyre = "vehicleTyre", flag = "flag"
+        /// Alpha-cutout foliage cards (textures with transparent backgrounds).
+        public static let needleCard = "needleCard", leafCard = "leafCard", oliveCard = "oliveCard", grassCard = "grassCard"
     }
 
     public enum TreeKind: String, CaseIterable, Sendable {
@@ -235,6 +237,129 @@ public enum Scenery {
                     return [SIMD2(-w, 0.12 * w), SIMD2(0, -0.02), SIMD2(w, 0.12 * w), SIMD2(0, 0.02)]
                 }, material: { _ in Material.palm })
             }
+        }
+        return m
+    }
+
+    // MARK: - Realistic foliage (cards over a solid core)
+
+    /// The parts of a close-up tree: `core` is the trunk, branches and a shrunken, darker
+    /// solid canopy (it casts the shadow and fills gaps); `cards` are alpha-textured
+    /// sprays of needles or leaves scattered over the canopy surface (render double-sided,
+    /// alpha-tested, without shadows).
+    public struct TreeParts: Sendable {
+        public var core: ModelMesh
+        public var cards: ModelMesh
+    }
+
+    public static func realisticTree(_ kind: TreeKind, seed: UInt64) -> TreeParts {
+        let solid = tree(kind, seed: seed, detail: 1)
+        var rng = SplitMix64(seed: seed ^ 0xC0FFEE)
+        func r(_ a: Float, _ b: Float) -> Float { Float(rng.range(Double(a), Double(b))) }
+        let foliageNames: Set<String> = [Material.leaves, Material.needles]
+        // Which vertices belong to the canopy?
+        var isFoliage = [Bool](repeating: false, count: solid.vertexCount)
+        for part in solid.parts where foliageNames.contains(part.material) {
+            for i in part.indices { isFoliage[Int(i)] = true }
+        }
+        let foliageIdx = (0..<solid.vertexCount).filter { isFoliage[$0] }
+        if kind == .palm || foliageIdx.isEmpty { return TreeParts(core: solid, cards: ModelMesh()) }
+
+        // Shrink the solid canopy towards each crown's middle and darken it: it becomes the
+        // shadowed interior that the cards poke out of.
+        var core = solid
+        var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
+        for i in foliageIdx {
+            let p = solid.positions[i]
+            lo = SIMD3(min(lo.x, p.x), min(lo.y, p.y), min(lo.z, p.z))
+            hi = SIMD3(max(hi.x, p.x), max(hi.y, p.y), max(hi.z, p.z))
+        }
+        let crownCentre = (lo + hi) / 2
+        let height = hi.y
+        let shrink: Float = kind == .spruce ? 0.66 : (kind == .cypress || kind == .poplar ? 0.78 : 0.74)
+        for i in foliageIdx {
+            let p = solid.positions[i]
+            let axis = kind == .spruce || kind == .cypress || kind == .poplar ? SIMD3(0, p.y, 0) : crownCentre
+            core.positions[i] = axis + (p - axis) * shrink
+            core.colors[i] = core.colors[i] * SIMD4(0.78, 0.8, 0.76, 1)
+        }
+
+        // Cards.
+        let material: String
+        let count: Int
+        let size: (Float, Float)
+        switch kind {
+        case .spruce: material = Material.needleCard; count = 340; size = (1.8, 2.8)
+        case .cypress: material = Material.needleCard; count = 160; size = (1.0, 1.5)
+        case .stonePine: material = Material.needleCard; count = 220; size = (2.0, 3.0)
+        case .olive: material = Material.oliveCard; count = 130; size = (1.3, 1.9)
+        case .poplar: material = Material.leafCard; count = 200; size = (1.5, 2.2)
+        case .broadleaf, .palm: material = Material.leafCard; count = 280; size = (2.2, 3.2)
+        }
+        var cards = ModelMesh()
+        let up = SIMD3<Float>(0, 1, 0)
+        for _ in 0..<count {
+            let i = foliageIdx[Int(rng.next() % UInt64(foliageIdx.count))]
+            let p = solid.positions[i]
+            var n = solid.normals[i]
+            if n.norm < 0.5 { n = up }
+            let s = r(size.0, size.1) * max(0.6, height / 15)
+            let radial = SIMD3(p.x, 0, p.z)
+            // Spruce fronds droop outwards; leaf sprays are oriented at random.
+            var along: SIMD3<Float>
+            if kind == .spruce || kind == .stonePine {
+                along = (radial.norm > 0.01 ? radial.unit : SIMD3(1, 0, 0)) + SIMD3(0, -0.45, 0)
+            } else {
+                let a = r(0, 6.28)
+                along = SIMD3(cos(a), r(-0.3, 0.6), sin(a))
+            }
+            along = (along - n * along.dotp(n)).unit
+            let side = n.crossp(along).unit
+            let centre = p + n * (s * r(0.05, 0.25)) + along * (s * 0.25)
+            // Light the card as part of the crown, not as a flat plane.
+            let shadeN = (n * 0.75 + up * 0.25).unit
+            let base = UInt32(cards.vertexCount)
+            let corners: [(Float, Float)] = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)]
+            let pts = corners.map { centre + side * ($0.0 * s) + along * ($0.1 * s) }
+            // Never let a low frond dip into the ground.
+            let lift = max(0, 0.25 - pts.map(\.y).min()!)
+            for (k, (u, v)) in corners.enumerated() {
+                cards.addVertex(pts[k] + SIMD3(0, lift, 0), shadeN, SIMD2(u + 0.5, v + 0.5))
+            }
+            cards.addIndices([base, base + 1, base + 2, base, base + 2, base + 3], material: material)
+        }
+        // Colour: darker low down and inside the crown, sun-bleached at the top; random hue shift.
+        let tintR = r(0.9, 1.1), tintG = r(0.92, 1.08)
+        cards.colorize { p, n in
+            let h = max(0, min(1, p.y / max(height, 1)))
+            let light: Float = 0.62 + 0.38 * max(0, min(1, h * 0.7 + n.y * 0.3 + 0.1))
+            return SIMD4(light * tintR, light * tintG, light, 1)
+        }
+        return TreeParts(core: core, cards: cards)
+    }
+
+    /// A clump of grass: three crossed alpha cards with the grass texture.
+    public static func grassClump(seed: UInt64, height: Float = 0.45, dry: Bool = false) -> ModelMesh {
+        var rng = SplitMix64(seed: seed)
+        var m = ModelMesh()
+        let start = Float(rng.range(0, 3.14))
+        for k in 0..<3 {
+            let a = start + Float(k) * .pi / 3
+            let d = SIMD3<Float>(cos(a), 0, sin(a))
+            let w = Float(rng.range(0.55, 0.9)), h = height * Float(rng.range(0.75, 1.25))
+            let lean = SIMD3<Float>(-sin(a), 0, cos(a)) * Float(rng.range(-0.08, 0.08))
+            let n = SIMD3<Float>(0, 1, 0)
+            let b = UInt32(m.vertexCount)
+            m.addVertex(-d * (w / 2), n, SIMD2(0, 0))
+            m.addVertex(d * (w / 2), n, SIMD2(1, 0))
+            m.addVertex(d * (w / 2) + lean + SIMD3(0, h, 0), n, SIMD2(1, 1))
+            m.addVertex(-d * (w / 2) + lean + SIMD3(0, h, 0), n, SIMD2(0, 1))
+            m.addIndices([b, b + 1, b + 2, b, b + 2, b + 3], material: Material.grassCard)
+        }
+        let tint: SIMD4<Float> = dry ? SIMD4(1.15, 1.0, 0.7, 1) : SIMD4(Float(rng.range(0.9, 1.05)), 1, Float(rng.range(0.9, 1.05)), 1)
+        m.colorize { p, _ in
+            let ao: Float = 0.6 + 0.4 * min(1, p.y / 0.4)
+            return SIMD4(tint.x * ao, tint.y * ao, tint.z * ao, 1)
         }
         return m
     }

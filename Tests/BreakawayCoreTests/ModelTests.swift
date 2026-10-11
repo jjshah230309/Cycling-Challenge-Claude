@@ -195,6 +195,19 @@ final class ModelTests: XCTestCase {
         for pose in Scenery.SpectatorPose.allCases {
             assertValid(Scenery.spectator(pose: pose, shirt: SIMD4(1, 0, 0, 1), trousers: SIMD4(0, 0, 1, 1), skin: SIMD4(0.8, 0.6, 0.5, 1), seed: 9), "\(pose)")
         }
+        for kind in Scenery.TreeKind.allCases {
+            let parts = Scenery.realisticTree(kind, seed: 11)
+            assertValid(parts.core, "\(kind) core")
+            if kind != .palm {
+                assertValid(parts.cards, "\(kind) cards")
+                XCTAssertGreaterThan(parts.cards.triangleCount, 100, "\(kind) cards")
+                // Cards stay within the tree's own crown.
+                let core = parts.core.bounds, cards = parts.cards.bounds
+                XCTAssertLessThan(cards.max.y, core.max.y + 4, "\(kind)")
+                XCTAssertGreaterThan(cards.min.y, -0.5, "\(kind)")
+            }
+        }
+        assertValid(Scenery.grassClump(seed: 3), "grass clump")
         assertValid(Scenery.rock(seed: 5), "rock")
         assertValid(Scenery.campervan(color: SIMD4(1, 1, 1, 1), seed: 2), "van")
         assertValid(Scenery.grassTuft(seed: 1, flowers: true), "grass")
@@ -210,6 +223,17 @@ final class ModelTests: XCTestCase {
         }
         for k in 0..<4 { trees.append(Scenery.rock(seed: UInt64(k)), transform: .translation(SIMD3(Float(k) * 3 - 5, 0.3, -6))) }
         try trees.objText(name: "trees").write(to: url.appendingPathComponent("trees.obj"), atomically: true, encoding: .utf8)
+        var forest = ModelMesh()
+        for (i, kind) in Scenery.TreeKind.allCases.enumerated() {
+            let parts = Scenery.realisticTree(kind, seed: UInt64(i + 7))
+            let t = RigidTransform.translation(SIMD3(Float(i) * 9 - 27, 0, 0))
+            forest.append(parts.core, transform: t)
+            forest.append(parts.cards, transform: t)
+        }
+        for k in 0..<60 {
+            forest.append(Scenery.grassClump(seed: UInt64(k)), transform: .translation(SIMD3(Float(k % 12) * 0.5 - 30, 0, 6 + Float(k / 12) * 0.5)))
+        }
+        try forest.objText(name: "forest").write(to: url.appendingPathComponent("forest.obj"), atomically: true, encoding: .utf8)
         var houses = ModelMesh()
         let wall: [SIMD4<Float>] = [SIMD4(0.95, 0.9, 0.8, 1), SIMD4(0.9, 0.75, 0.6, 1), SIMD4(0.85, 0.85, 0.85, 1)]
         for (i, style) in Scenery.HouseStyle.allCases.enumerated() {

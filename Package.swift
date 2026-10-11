@@ -34,7 +34,7 @@ targets.append(
         name: "Breakaway",
         dependencies: ["BreakawayCore"],
         path: "Sources/Breakaway",
-        exclude: ["Info.plist"],
+        exclude: ["Info.plist", "Resources"],
         linkerSettings: [
             .unsafeFlags(["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist", "-Xlinker", infoPlist]),
         ]

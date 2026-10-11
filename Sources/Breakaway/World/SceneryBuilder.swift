@@ -78,10 +78,22 @@ enum SceneryBuilder {
         let biome = route.record.biome
         let (kinds, density) = treeKinds(biome)
         // Three variants of each kind at three levels of detail.
+        // Close up: a solid core plus alpha-tested needle/leaf cards; farther away the plain meshes.
         var protos: [Scenery.TreeKind: [[ModelMesh]]] = [:]
+        var cardProtos: [Scenery.TreeKind: [ModelMesh]] = [:]
         for (kind, _) in kinds {
-            protos[kind] = (0..<3).map { v in [1.0, 0.5, 0.2].map { Scenery.tree(kind, seed: UInt64(v * 7919 + 13), detail: Float($0)) } }
+            var variants: [[ModelMesh]] = []
+            var cards: [ModelMesh] = []
+            for v in 0..<3 {
+                let seed = UInt64(v * 7919 + 13)
+                let real = Scenery.realisticTree(kind, seed: seed)
+                variants.append([real.core, Scenery.tree(kind, seed: seed, detail: 0.5), Scenery.tree(kind, seed: seed, detail: 0.2)])
+                cards.append(real.cards)
+            }
+            protos[kind] = variants
+            cardProtos[kind] = cards
         }
+        var nearCards = Chunks(length: 400, route: route, frame: frame)
         let chunkLength = 400.0
         var near = [Chunks](repeating: Chunks(length: chunkLength, route: route, frame: frame), count: 3)
         var far = [Chunks](repeating: Chunks(length: chunkLength, route: route, frame: frame), count: 2)
@@ -124,6 +136,7 @@ enum SceneryBuilder {
                 let lods = protos[kind]![variant]
                 if lateral < 90 {
                     for l in 0..<3 { near[l].add(lods[l], distance: d, at: pos, yaw: yaw, scale: scale, tint: tint) }
+                    nearCards.add(cardProtos[kind]![variant], distance: d, at: pos, yaw: yaw, scale: scale, tint: tint)
                 } else {
                     for l in 0..<2 { far[l].add(lods[l + 1], distance: d, at: pos, yaw: yaw, scale: scale, tint: tint) }
                 }
@@ -160,9 +173,13 @@ enum SceneryBuilder {
         // Near trees: full detail close by, simpler beyond ~200 m, minimal beyond ~600 m.
         container.addChildNode(near[0].nodes(material: mats.material, lods: [(200, { near[1].meshes[$0] }), (650, { near[2].meshes[$0] })],
                                              name: "trees-near"))
+        // Foliage cards: no shadows (the cores cast them), hidden beyond the near range.
+        let cardsNode = nearCards.nodes(material: mats.material, lods: [(230, { _ in nil })], name: "foliage-cards")
         container.addChildNode(far[0].nodes(material: mats.material, lods: [(700, { far[1].meshes[$0] })], name: "trees-far"))
         container.addChildNode(rockChunks.nodes(material: mats.material, name: "rocks"))
         container.enumerateChildNodes { n, _ in n.castsShadow = true }
+        cardsNode.enumerateChildNodes { n, _ in n.castsShadow = false }
+        container.addChildNode(cardsNode)
         return container
     }
 
@@ -172,10 +189,9 @@ enum SceneryBuilder {
         let biome = route.record.biome
         guard biome != .urban else { return SCNNode() }
         var tufts: [ModelMesh] = []
-        let alpine = biome == .alpine, dry = biome == .coastal
+        let dry = biome == .coastal
         for k in 0..<10 {
-            let flowers: Bool = alpine && k % 3 == 0
-            tufts.append(Scenery.grassTuft(seed: UInt64(k * 17 + 3), flowers: flowers, dry: dry))
+            tufts.append(Scenery.grassClump(seed: UInt64(k * 17 + 3), height: dry ? 0.35 : 0.5, dry: dry))
         }
         var chunks = Chunks(length: 150, route: route, frame: frame)
         var d = 0.0
@@ -183,9 +199,9 @@ enum SceneryBuilder {
             let p = route.position(at: d)
             let dir = route.direction(at: d)
             let right = LocalPoint(x: dir.y, y: -dir.x)
-            for _ in 0..<6 {
+            for _ in 0..<9 {
                 let side = rng.chance(0.5) ? 1.0 : -1.0
-                let lateral = rng.range(6.2, 13)
+                let lateral = rng.range(6.2, 16)
                 let q = p + right * (side * lateral) + dir * rng.range(-1.5, 1.5)
                 if let hit = terrain.nearestRoad(x: q.x, y: q.y, maxDistance: 6), hit.distance < 6 { continue }
                 let h = terrain.height(x: q.x, y: q.y)
@@ -436,6 +452,10 @@ final class SceneryMaterials {
         table[M.palm] = palm
         table[M.rock] = lambert(ProceduralTextures.groundDetail(), repeatScale: 2)
         table[M.grass] = lambert(doubleSided: true)
+        table[M.needleCard] = SceneryMaterials.cutout(SceneryTextures.needleFrond())
+        table[M.leafCard] = SceneryMaterials.cutout(SceneryTextures.leafCluster(olive: false))
+        table[M.oliveCard] = SceneryMaterials.cutout(SceneryTextures.leafCluster(olive: true))
+        table[M.grassCard] = SceneryMaterials.cutout(SceneryTextures.grassCard())
         for style in Scenery.HouseStyle.allCases {
             table["\(M.wall).\(style.rawValue)"] = lambert(SceneryTextures.facade(style))
         }
@@ -469,6 +489,22 @@ final class SceneryMaterials {
         table["guardrail"] = rail
     }
 
+    /// Alpha-tested foliage: texels below half coverage are discarded, so cards sort and
+    /// depth-test like solid geometry (no blending, no ordering artefacts).
+    static func cutout(_ image: CGImage) -> SCNMaterial {
+        let m = SCNMaterial()
+        m.lightingModel = .lambert
+        m.diffuse.contents = image
+        m.diffuse.mipFilter = .linear
+        m.diffuse.wrapS = .clamp
+        m.diffuse.wrapT = .clamp
+        m.isDoubleSided = true
+        m.blendMode = .replace
+        m.writesToDepthBuffer = true
+        m.shaderModifiers = [.fragment: "if (_output.color.a < 0.4) { discard_fragment(); }\n_output.color.a = 1.0;"]
+        return m
+    }
+
     func material(_ name: String) -> SCNMaterial {
         if let m = table[name] { return m }
         let m = SCNMaterial()
@@ -481,6 +517,125 @@ final class SceneryMaterials {
 
 /// Textures for scenery (all drawn at runtime).
 enum SceneryTextures {
+    /// A spruce/fir frond: a twig up the middle (v) with needles angled forward, on transparency.
+    static func needleFrond() -> CGImage {
+        let w = 256, h = 512
+        let ctx = ProceduralTextures.context(w, h)
+        ctx.clear(CGRect(x: 0, y: 0, width: w, height: h))
+        var r = SceneRandom(seed: 41)
+        let W = Double(w), H = Double(h)
+        // Side shoots.
+        var shoots: [(x0: Double, y0: Double, x1: Double, y1: Double)] = [(W / 2, 0, W / 2, H * 0.97)]
+        var y = H * 0.08
+        while y < H * 0.9 {
+            let span: Double = sin((y / H) * .pi) * W * 0.44 + 10
+            for s in [-1.0, 1.0] { shoots.append((W / 2, y, W / 2 + s * span, y + span * 0.55)) }
+            y += r.range(26, 40)
+        }
+        ctx.setLineCap(.round)
+        for sh in shoots {
+            ctx.setStrokeColor(ProceduralTextures.cg(0x4A3320))
+            ctx.setLineWidth(sh.x0 == sh.x1 ? 4 : 2)
+            ctx.move(to: CGPoint(x: sh.x0, y: sh.y0))
+            ctx.addLine(to: CGPoint(x: sh.x1, y: sh.y1))
+            ctx.strokePath()
+            // Needles along the shoot.
+            let len = hypot(sh.x1 - sh.x0, sh.y1 - sh.y0)
+            let n = Int(len / 2.2)
+            for k in 0..<n {
+                let t = Double(k) / Double(max(n, 1))
+                let px = sh.x0 + (sh.x1 - sh.x0) * t, py = sh.y0 + (sh.y1 - sh.y0) * t
+                let dirx = (sh.x1 - sh.x0) / max(len, 1), diry = (sh.y1 - sh.y0) / max(len, 1)
+                for side in [-1.0, 1.0] {
+                    let nl = r.range(9, 16) * (1 - 0.4 * t)
+                    // Rotate the shoot direction by ±55° for the needle.
+                    let a = side * 0.95
+                    let nx = dirx * cos(a) - diry * sin(a), ny = dirx * sin(a) + diry * cos(a)
+                    let light: Double = r.range(0.0, 1.0) * 0.6 + t * 0.4
+                    let cr = CGFloat(0.12 + 0.12 * light), cgr = CGFloat(0.28 + 0.2 * light), cb = CGFloat(0.1 + 0.08 * light)
+                    ctx.setStrokeColor(CGColor(srgbRed: cr, green: cgr, blue: cb, alpha: 1))
+                    ctx.setLineWidth(r.range(1.4, 2.4))
+                    ctx.move(to: CGPoint(x: px, y: py))
+                    ctx.addLine(to: CGPoint(x: px + nx * nl, y: py + ny * nl))
+                    ctx.strokePath()
+                }
+            }
+        }
+        return ctx.makeImage()!
+    }
+
+    /// A spray of broad leaves (or narrow silvery olive leaves) on transparency.
+    static func leafCluster(olive: Bool) -> CGImage {
+        let n = 512
+        let ctx = ProceduralTextures.context(n, n)
+        ctx.clear(CGRect(x: 0, y: 0, width: n, height: n))
+        var r = SceneRandom(seed: olive ? 77 : 55)
+        let N = Double(n)
+        // Twigs.
+        ctx.setStrokeColor(ProceduralTextures.cg(0x4A3828))
+        ctx.setLineCap(.round)
+        for k in 0..<7 {
+            let a = Double(k) / 7 * 2 * .pi + r.range(0, 0.6)
+            ctx.setLineWidth(3)
+            ctx.move(to: CGPoint(x: N / 2, y: N / 2))
+            ctx.addLine(to: CGPoint(x: N / 2 + cos(a) * N * 0.36, y: N / 2 + sin(a) * N * 0.36))
+            ctx.strokePath()
+        }
+        let leaves = olive ? 900 : 700
+        for _ in 0..<leaves {
+            let a: Double = r.range(0, 2 * .pi)
+            let rad: Double = pow(r.unit(), 0.6) * N * 0.44
+            let x = N / 2 + cos(a) * rad, y = N / 2 + sin(a) * rad
+            let len = olive ? r.range(16, 26) : r.range(16, 30)
+            let wid = olive ? len * 0.22 : len * r.range(0.5, 0.7)
+            let light: Double = r.unit()
+            let lr: Double = olive ? 0.42 + 0.18 * light : 0.16 + 0.16 * light
+            let lg: Double = olive ? 0.48 + 0.16 * light : 0.3 + 0.22 * light
+            let lb: Double = olive ? 0.34 + 0.12 * light : 0.1 + 0.08 * light
+            let c = CGColor(srgbRed: CGFloat(lr), green: CGFloat(lg), blue: CGFloat(lb), alpha: 1)
+            ctx.saveGState()
+            ctx.translateBy(x: x, y: y)
+            ctx.rotate(by: r.range(0, 2 * .pi))
+            ctx.setFillColor(c)
+            ctx.fillEllipse(in: CGRect(x: -len / 2, y: -wid / 2, width: len, height: wid))
+            // Midrib highlight.
+            ctx.setStrokeColor(CGColor(gray: 1, alpha: 0.12))
+            ctx.setLineWidth(1)
+            ctx.move(to: CGPoint(x: -len / 2, y: 0))
+            ctx.addLine(to: CGPoint(x: len / 2, y: 0))
+            ctx.strokePath()
+            ctx.restoreGState()
+        }
+        return ctx.makeImage()!
+    }
+
+    /// Grass blades rising from the bottom edge, with the odd seed head.
+    static func grassCard() -> CGImage {
+        let w = 512, h = 256
+        let ctx = ProceduralTextures.context(w, h)
+        ctx.clear(CGRect(x: 0, y: 0, width: w, height: h))
+        var r = SceneRandom(seed: 19)
+        ctx.setLineCap(.round)
+        for _ in 0..<420 {
+            let x = r.range(6, Double(w) - 6)
+            let centred: Double = 1 - abs(x - Double(w) / 2) / Double(w) * 0.6
+            let bh: Double = r.range(50, Double(h) - 6) * centred
+            let bend = r.range(-40, 40)
+            let light: Double = r.unit()
+            let gr = CGFloat(0.2 + 0.25 * light), gg = CGFloat(0.32 + 0.3 * light), gb = CGFloat(0.1 + 0.08 * light)
+            ctx.setStrokeColor(CGColor(srgbRed: gr, green: gg, blue: gb, alpha: 1))
+            ctx.setLineWidth(r.range(1.6, 3.4))
+            ctx.move(to: CGPoint(x: x, y: 0))
+            ctx.addQuadCurve(to: CGPoint(x: x + bend, y: bh), control: CGPoint(x: x + bend * 0.2, y: bh * 0.6))
+            ctx.strokePath()
+            if r.chance(0.03) {
+                ctx.setFillColor(CGColor(srgbRed: 0.75, green: 0.68, blue: 0.45, alpha: 1))
+                ctx.fillEllipse(in: CGRect(x: x + bend - 3, y: bh - 4, width: 6, height: 16))
+            }
+        }
+        return ctx.makeImage()!
+    }
+
     static func bark() -> CGImage {
         let ctx = ProceduralTextures.context(64, 256)
         ctx.setFillColor(CGColor(gray: 0.75, alpha: 1))
