@@ -15,9 +15,9 @@ Ride the Alpe d'Huez hairpins, the Stelvio, Mont Ventoux, the Zoncolan and the A
 | | |
 |---|---|
 | **Routes** | 16 real routes: Grand Tour climbs, Monuments & Classics, UCI World Championship circuits. Plus any GPX you import. |
-| **World** | 3D terrain from Copernicus EU-DEM / SRTM, roads cut into the hillside, forests, villages, crowds on the climbs, KOM banners, French-style km markers, cobbled sectors, lakes and sea. |
-| **Bikes** | 7 frames (aero, climbing, TT, endurance, gravel, steel, track) and 6 wheelsets. Each changes weight, CdA and rolling resistance, and each is modelled in 3D. |
-| **Riders** | Procedural riders that pedal with leg IK and lean into corners. Kit colours and body build are customisable. |
+| **World** | 3D terrain from Copernicus EU-DEM / SRTM with cascaded shadows, roads cut into the hillside, layered spruce forests, broadleaf woods, stone pines, cypresses and palms, regional villages (chalets, Flemish brick, Mediterranean stucco, apartment blocks), crowds and camper vans on the climbs, guardrails, snow poles, KOM banners, French-style km markers, cobbled sectors, rippling lakes and sea. |
+| **Bikes** | 7 frames (aero, climbing, TT, endurance, gravel, steel, track) and 6 wheelsets, built from real frame geometry (stack, reach, tube angles) with aerofoil tubes, toothed chainrings and cassettes, a chain, derailleurs, disc brakes, laced spokes and clear-coat paint. Each changes weight, CdA, rim "sail" and rolling resistance. |
+| **Riders** | Anatomically lofted riders with kit panels, race numbers and vented helmets. Leg and arm IK with ankling; they switch between hoods, drops, descending tuck, out-of-the-saddle (the bike rocks) and TT extensions, and lean and steer through bends. |
 | **Modes** | Free Ride, Group Ride (pace partners), Race (AI field), Time Trial (no draft), Workout (ERG). |
 | **Trainers** | Bluetooth FTMS smart trainers (ERG and gradient simulation), Cycling Power meters, heart-rate straps and cadence sensors. |
 | **Workouts** | 14 built-in sessions (FTP tests, sweet spot, VO₂, 30/30s, Tabata…). Import and export of Zwift `.zwo` files. |
@@ -77,11 +77,32 @@ Each route carries a data-quality badge:
 
 For a perfect copy of any course, import the organiser's official GPX (*Ride ▸ Import GPX Route…*).
 
+## Physics
+
+The ride model is Martin et al. (1998) extended with the effects that matter on real roads:
+
+| Effect | Model |
+|---|---|
+| Air drag | ½·ρ·CdA(β)·Vₐ·(v + w_h)·(1 − draft). Drag area grows with yaw angle; deep rims "sail" in a crosswind |
+| Wind | Mean wind + gusts (Ornstein–Uhlenbeck), sheltered by forests and towns, split into head and cross components on every bend. Pick *Still air*, *Typical breeze* or *Windy* on ride setup |
+| Air density | Altitude (ISA), temperature lapse with height, humidity |
+| Rolling | Crr by surface and tyre, rising with speed (tyre hysteresis; vibration losses on pavé and gravel) plus wheel-bearing friction |
+| Inertia | Wheel moment of inertia from rim depth and weight |
+| Riding position | Hoods, drops (−8 % drag), tuck (−20 %), standing (+10 %), TT position — chosen automatically from gradient, speed and effort |
+| Drafting | Wind-tunnel/CFD-based shelter; in a crosswind the wake drifts downwind so **echelons** form; a small push for the rider being followed |
+| Cornering | Safe speed v = √(μ·g·r) from the road's curvature with braking distance; riders brake for hairpins and city corners and lean at atan(v²/(g·r)) |
+| Drivetrain | Real chainrings and cassettes per frame: cadence from gear and speed, chain efficiency per sprocket |
+| Physiology | W′ balance (Skiba): AI attacks burn matches and fizzle when they run out; your W′ is on the HUD |
+| Pack | AI riders can't ride through each other; they swing out to pass |
+
+Smart trainers in SIM mode receive the gradient plus the real headwind, rolling resistance and drag coefficient for the current position and shelter.
+
 ## Architecture
 
 ```
 Sources/BreakawayCore   Platform-independent engine (builds and tests on Linux)
-  Physics/              Martin et al. power model, drafting (Blocken et al.), air density
+  Physics/              Martin et al. power model + yaw aero, wind, cornering, W′, gearing, drafting/echelons
+  Models/               Procedural 3D models (bikes, riders + pose solver, trees, houses, crowds) — testable on Linux
   Routes/               Route model, climb detection + FIETS categories, generated catalogue
   World/TerrainModel    DEM bicubic + fractal detail + road cut/fill blending
   Session/              RideSimulation (player + AI riders, laps, KOMs, ERG/SIM targets), metrics
@@ -89,7 +110,7 @@ Sources/BreakawayCore   Platform-independent engine (builds and tests on Linux)
   Workouts/             Workout model, library, .zwo import/export
   Export/               FIT encoder, GPX/TCX export, GPX import
 Sources/Breakaway       macOS app: SwiftUI UI, SceneKit world, CoreBluetooth devices
-Tests/                  48 XCTest cases: physics, protocols, routes, simulation, exports
+Tests/                  70+ XCTest cases: physics, models and poses, protocols, routes, simulation, exports
 tools/routegen          Route data pipeline (OSM + DEM → Swift)
 ```
 
@@ -99,7 +120,7 @@ Run the engine tests anywhere Swift runs: `swift test`.
 
 - **No online multiplayer.** Other riders are physics-simulated AI (pace partners and a race field matched to your FTP), not real people.
 - **No licensed brand bikes.** The frames and wheels are generic archetypes with realistic physics. Real brand models would need trademark licences.
-- Graphics are procedural (no art team), so the look is stylised rather than photoreal.
+- Graphics are fully procedural (no art team or scanned assets): detailed, but stylised rather than photoreal.
 - Some city circuits are approximate (see above). The mountain climbs match their race-book figures.
 
 ## Attribution

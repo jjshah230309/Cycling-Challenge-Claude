@@ -231,6 +231,26 @@ enum ProceduralTextures {
         return ctx.makeImage()!
     }
 
+    /// White road paint on a transparent background; letters stretched along the road
+    /// (v = 0 nearest the approaching rider) so they read correctly at a glancing angle.
+    static func roadPaint(_ text: String) -> CGImage {
+        let w = 512, h = 1024
+        let ctx = context(w, h)
+        ctx.clear(CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.saveGState()
+        ctx.scaleBy(x: 1, y: 2)
+        drawText(text, in: ctx, rect: CGRect(x: 10, y: 40, width: CGFloat(w) - 20, height: CGFloat(h) / 2 - 80), color: 0xF4F4EE, maxSize: 200)
+        ctx.restoreGState()
+        // Worn paint: knock holes in it.
+        var r = SceneRandom(seed: UInt64(text.utf8.count))
+        ctx.setBlendMode(.clear)
+        for _ in 0..<500 {
+            let s = r.range(2, 8)
+            ctx.fillEllipse(in: CGRect(x: r.range(0, Double(w)), y: r.range(0, Double(h)), width: s, height: s))
+        }
+        return ctx.makeImage()!
+    }
+
     static func marker(_ lines: [String], accent: UInt32) -> CGImage {
         let w = 256, h = 320
         let ctx = context(w, h)

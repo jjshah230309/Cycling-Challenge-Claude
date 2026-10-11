@@ -419,6 +419,39 @@ enum WorldBuilder {
         return node
     }
 
+    /// A painted message lying on the road surface, reading towards approaching riders.
+    static func roadPaint(_ text: String, at d: Double, lateral: Double, route: Route, frame: WorldFrame) -> SCNNode {
+        let length = 6.0, width = 3.2
+        var mesh = MeshData()
+        let rows = 4
+        for k in 0...rows {
+            let dd = d + length * Double(k) / Double(rows)
+            let p = route.position(at: dd)
+            let dir = route.direction(at: dd)
+            let right = LocalPoint(x: dir.y, y: -dir.x)
+            let e = route.elevation(at: dd) + 0.07
+            for side in [-1.0, 1.0] {
+                let q = p + right * (lateral + side * width / 2)
+                mesh.addVertex(frame.point(q, e - abs(lateral + side * width / 2) * 0.008), normal: SIMD3(0, 1, 0),
+                               uv: SIMD2(side < 0 ? 0 : 1, 1 - Float(k) / Float(rows)))
+            }
+            if k > 0 {
+                let a = UInt32((k - 1) * 2), b = UInt32(k * 2)
+                mesh.addQuad(a, a + 1, b + 1, b)
+            }
+        }
+        let m = SCNMaterial()
+        m.lightingModel = .lambert
+        m.diffuse.contents = ProceduralTextures.roadPaint(text)
+        m.transparencyMode = .aOne
+        m.writesToDepthBuffer = false
+        m.isDoubleSided = true
+        let node = SCNNode(geometry: mesh.geometry(materials: [m], includeColors: false))
+        node.castsShadow = false
+        node.renderingOrder = 5
+        return node
+    }
+
     static func signage(route: Route, frame: WorldFrame) -> SCNNode {
         let container = SCNNode()
         container.name = "signage"
@@ -454,6 +487,18 @@ enum WorldBuilder {
                 n.simdPosition = frame.point(q, route.elevation(at: d) + 0.75)
                 n.simdOrientation = simd_quatf(angle: frame.yaw(dir), axis: SIMD3(0, 1, 0))
                 container.addChildNode(n)
+            }
+        }
+        // Fans' messages painted on the road over the last kilometres of the big climbs.
+        let slogans = ["ALLEZ", "FORZA", "VAMOS", "HUP HUP", "ALLEZ ALLEZ", "VAI!", "GO GO GO", "♥ VÉLO", "CHAPEAU", "DAJE"]
+        var paintRNG = SceneRandom(seed: UInt64(route.length))
+        for climb in route.climbs where climb.category <= .cat2 && climb.length > 2000 {
+            var d = max(climb.startDistance, climb.endDistance - 4000)
+            while d < climb.endDistance - 60 {
+                if paintRNG.chance(0.55) {
+                    container.addChildNode(roadPaint(paintRNG.pick(slogans), at: d, lateral: paintRNG.range(-1.6, 1.6), route: route, frame: frame))
+                }
+                d += paintRNG.range(90, 220)
             }
         }
         // Cobbled sector signs.

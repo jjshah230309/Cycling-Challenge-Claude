@@ -174,9 +174,11 @@ public struct RiderModel: Sendable {
         let ua = limb(length: d.upperArm, start: -0.05, end: d.upperArm + 0.025, radius: { t in
             SIMD2(mixf(0.06, 0.037, t), mixf(0.056, 0.04, t)) * mixf(1, G, 0.8)
         }, material: { $0 < 0.5 ? M.sleeve : M.skin })
-        let fa = limb(length: d.forearm, start: -0.025, end: d.forearm + 0.01, radius: { t in
+        var fa = limb(length: d.forearm, start: -0.025, end: d.forearm + 0.01, radius: { t in
             SIMD2(mixf(0.041, 0.026, t), mixf(0.037, 0.022, t)) * mixf(1, G, 0.6)
         }, material: { $0 > 0.9 ? M.glove : M.skin })
+        fa.ellipsoid(center: V3(0, 0.0, -0.004), radii: V3(0.038, 0.04, 0.036) * mixf(1, G, 0.6), rings: hi ? 6 : 3, segments: hi ? 10 : 6,
+                     material: M.skin)   // elbow
         var hand = ModelMesh()
         hand.ellipsoid(center: V3(0, 0.05, -0.004), radii: V3(0.034, 0.058, 0.026), rings: hi ? 8 : 4, segments: hi ? 12 : 6, material: M.glove)
         // Thumb.
