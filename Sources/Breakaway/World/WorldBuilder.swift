@@ -89,7 +89,8 @@ enum WorldBuilder {
                                     turbidity: turbidity, sunElevation: asin(sunDirection.y) / (.pi / 2),
                                     upperAtmosphereScattering: 0.55, groundAlbedo: 0.35)
         sky.sunAzimuth = atan2(sunDirection.x, sunDirection.z)
-        if let cube = sky.imageFromTexture()?.takeUnretainedValue() {
+        if let raw = sky.imageFromTexture()?.takeUnretainedValue() {
+            let cube = hazed(skyCube: raw)
             scene.background.contents = cube
             scene.lightingEnvironment.contents = cube
         } else {
@@ -105,6 +106,36 @@ enum WorldBuilder {
         scene.fogDensityExponent = 1.25
         scene.fogColor = biome == .urban ? NSColor(srgbRed: 0.80, green: 0.85, blue: 0.90, alpha: 1)
             : NSColor(srgbRed: 0.74, green: 0.83, blue: 0.93, alpha: 1)
+    }
+
+    /// The clear-sky model is very saturated; real summer skies over the mountains carry
+    /// haze. Wash each side face of the cube towards white near the horizon.
+    static func hazed(skyCube image: CGImage) -> CGImage {
+        let w = image.width, h = image.height
+        guard h == w * 6, let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                             space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return image }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        let haze = CGColor(srgbRed: 0.86, green: 0.9, blue: 0.95, alpha: 1)
+        let clear = CGColor(srgbRed: 0.86, green: 0.9, blue: 0.95, alpha: 0)
+        let s = CGFloat(w)
+        // Vertical strip order (top to bottom): +X, −X, +Y, −Y, +Z, −Z. CG's origin is bottom-left.
+        for face in [0, 1, 4, 5] {
+            let top = CGFloat(h) - CGFloat(face) * s, bottom = top - s
+            let mid = (top + bottom) / 2
+            if let g = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: [clear, haze, haze] as CFArray,
+                                  locations: [0, 0.75, 1]) {
+                ctx.saveGState()
+                ctx.clip(to: CGRect(x: 0, y: mid, width: s, height: s / 2))
+                ctx.setAlpha(0.55)
+                ctx.drawLinearGradient(g, start: CGPoint(x: 0, y: top), end: CGPoint(x: 0, y: mid), options: [])
+                ctx.restoreGState()
+            }
+        }
+        // A light veil over the whole sky dome.
+        ctx.setFillColor(CGColor(srgbRed: 0.9, green: 0.93, blue: 0.97, alpha: 0.16))
+        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        return ctx.makeImage() ?? image
     }
 
     /// A layer of fair-weather cumulus high above the route.

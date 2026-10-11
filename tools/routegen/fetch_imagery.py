@@ -97,6 +97,8 @@ def build(rid, box, size):
     out = a * (1 - fy) + b * fy
     # Sentinel-2 cloudless is mastered dark; lift the mid-tones a little for a sunlit look.
     out = 255 * np.power(np.clip(out / 255, 0, 1), 0.82) * 1.04
+    # Neutralise the mosaic's cool cast (forests read teal otherwise) and warm the soils.
+    out = out * np.array([1.07, 1.03, 0.88], dtype=np.float32)
     img = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
     os.makedirs(OUT_DIR, exist_ok=True)
     path = os.path.join(OUT_DIR, f"{rid}.jpg")

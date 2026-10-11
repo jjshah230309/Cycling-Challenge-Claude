@@ -289,7 +289,7 @@ public enum Scenery {
         let count: Int
         let size: (Float, Float)
         switch kind {
-        case .spruce: material = Material.needleCard; count = 340; size = (1.8, 2.8)
+        case .spruce: material = Material.needleCard; count = 480; size = (1.2, 1.9)
         case .cypress: material = Material.needleCard; count = 160; size = (1.0, 1.5)
         case .stonePine: material = Material.needleCard; count = 220; size = (2.0, 3.0)
         case .olive: material = Material.oliveCard; count = 130; size = (1.3, 1.9)
