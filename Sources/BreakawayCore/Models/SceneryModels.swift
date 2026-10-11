@@ -252,8 +252,10 @@ public enum Scenery {
         public var cards: ModelMesh
     }
 
-    public static func realisticTree(_ kind: TreeKind, seed: UInt64) -> TreeParts {
-        let solid = tree(kind, seed: seed, detail: 1)
+    /// `cardFraction` < 1 builds a lighter version (fewer, larger cards over a simpler core)
+    /// for mid-distance forests.
+    public static func realisticTree(_ kind: TreeKind, seed: UInt64, cardFraction: Float = 1) -> TreeParts {
+        let solid = tree(kind, seed: seed, detail: cardFraction < 0.6 ? 0.5 : 1)
         var rng = SplitMix64(seed: seed ^ 0xC0FFEE)
         func r(_ a: Float, _ b: Float) -> Float { Float(rng.range(Double(a), Double(b))) }
         let foliageNames: Set<String> = [Material.leaves, Material.needles]
@@ -298,12 +300,14 @@ public enum Scenery {
         }
         var cards = ModelMesh()
         let up = SIMD3<Float>(0, 1, 0)
-        for _ in 0..<count {
+        let lite = cardFraction < 1
+        let cardScale: Float = lite ? 1 / max(0.45, cardFraction.squareRoot()) : 1
+        for _ in 0..<max(12, Int(Float(count) * cardFraction)) {
             let i = foliageIdx[Int(rng.next() % UInt64(foliageIdx.count))]
             let p = solid.positions[i]
             var n = solid.normals[i]
             if n.norm < 0.5 { n = up }
-            let s = r(size.0, size.1) * max(0.6, height / 15)
+            let s = r(size.0, size.1) * max(0.6, height / 15) * cardScale
             let radial = SIMD3(p.x, 0, p.z)
             // Spruce fronds droop outwards; leaf sprays are oriented at random.
             var along: SIMD3<Float>

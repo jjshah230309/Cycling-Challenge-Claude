@@ -178,7 +178,7 @@ enum WorldBuilder {
         light.shadowCascadeSplittingFactor = 0.35
         light.maximumShadowDistance = 600
         light.automaticallyAdjustsShadowProjection = true
-        light.shadowColor = NSColor(white: 0, alpha: 0.55)
+        light.shadowColor = NSColor(white: 0, alpha: 0.45)
         let node = SCNNode()
         node.name = "sun"
         node.light = light

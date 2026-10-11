@@ -81,6 +81,7 @@ enum SceneryBuilder {
         // Close up: a solid core plus alpha-tested needle/leaf cards; farther away the plain meshes.
         var protos: [Scenery.TreeKind: [[ModelMesh]]] = [:]
         var cardProtos: [Scenery.TreeKind: [ModelMesh]] = [:]
+        var liteProtos: [Scenery.TreeKind: [Scenery.TreeParts]] = [:]
         for (kind, _) in kinds {
             var variants: [[ModelMesh]] = []
             var cards: [ModelMesh] = []
@@ -89,11 +90,15 @@ enum SceneryBuilder {
                 let real = Scenery.realisticTree(kind, seed: seed)
                 variants.append([real.core, Scenery.tree(kind, seed: seed, detail: 0.5), Scenery.tree(kind, seed: seed, detail: 0.2)])
                 cards.append(real.cards)
+                liteProtos[kind, default: []].append(Scenery.realisticTree(kind, seed: seed, cardFraction: 0.3))
             }
             protos[kind] = variants
             cardProtos[kind] = cards
         }
         var nearCards = Chunks(length: 400, route: route, frame: frame)
+        // Mid-distance forest: a simple core plus a third of the cards (larger), out to ~650 m.
+        var farCores = Chunks(length: 400, route: route, frame: frame)
+        var farCards = Chunks(length: 400, route: route, frame: frame)
         let chunkLength = 400.0
         var near = [Chunks](repeating: Chunks(length: chunkLength, route: route, frame: frame), count: 3)
         var far = [Chunks](repeating: Chunks(length: chunkLength, route: route, frame: frame), count: 2)
@@ -138,7 +143,10 @@ enum SceneryBuilder {
                     for l in 0..<3 { near[l].add(lods[l], distance: d, at: pos, yaw: yaw, scale: scale, tint: tint) }
                     nearCards.add(cardProtos[kind]![variant], distance: d, at: pos, yaw: yaw, scale: scale, tint: tint)
                 } else {
-                    for l in 0..<2 { far[l].add(lods[l + 1], distance: d, at: pos, yaw: yaw, scale: scale, tint: tint) }
+                    far[1].add(lods[2], distance: d, at: pos, yaw: yaw, scale: scale, tint: tint)
+                    let lite = liteProtos[kind]![variant]
+                    farCores.add(lite.core, distance: d, at: pos, yaw: yaw, scale: scale, tint: tint)
+                    farCards.add(lite.cards, distance: d, at: pos, yaw: yaw, scale: scale, tint: tint)
                 }
             }
             d += 10
@@ -175,11 +183,15 @@ enum SceneryBuilder {
                                              name: "trees-near"))
         // Foliage cards: no shadows (the cores cast them), hidden beyond the near range.
         let cardsNode = nearCards.nodes(material: mats.material, lods: [(230, { _ in nil })], name: "foliage-cards")
-        container.addChildNode(far[0].nodes(material: mats.material, lods: [(700, { far[1].meshes[$0] })], name: "trees-far"))
+        // Up to ~650 m: lite cores + cards; beyond: the plain low-detail meshes.
+        container.addChildNode(farCores.nodes(material: mats.material, lods: [(650, { far[1].meshes[$0] })], name: "trees-far"))
+        let farCardsNode = farCards.nodes(material: mats.material, lods: [(650, { _ in nil })], name: "foliage-cards-far")
         container.addChildNode(rockChunks.nodes(material: mats.material, name: "rocks"))
         container.enumerateChildNodes { n, _ in n.castsShadow = true }
         cardsNode.enumerateChildNodes { n, _ in n.castsShadow = false }
+        farCardsNode.enumerateChildNodes { n, _ in n.castsShadow = false }
         container.addChildNode(cardsNode)
+        container.addChildNode(farCardsNode)
         return container
     }
 
