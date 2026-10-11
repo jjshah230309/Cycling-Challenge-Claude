@@ -6,7 +6,7 @@ Ride the Alpe d'Huez hairpins, the Stelvio, Mont Ventoux, the Zoncolan and the A
 
 ![Climbing the Stelvio with the in-ride HUD](docs/screenshots/stelvio-ride.png)
 
-| Stelvio hairpins (helicopter cam) | Trouée d'Arenberg cobbles |
+| Stelvio hairpins (helicopter cam) | Trouée d'Arenberg pavé |
 |---|---|
 | ![Stelvio](docs/screenshots/stelvio-hairpins.png) | ![Arenberg](docs/screenshots/arenberg.png) |
 | **Milan–San Remo finale (Liguria)** | **Alpe d'Huez (side cam)** |
@@ -17,7 +17,7 @@ Ride the Alpe d'Huez hairpins, the Stelvio, Mont Ventoux, the Zoncolan and the A
 | | |
 |---|---|
 | **Routes** | 16 real routes: Grand Tour climbs, Monuments & Classics, UCI World Championship circuits. Plus any GPX you import. |
-| **World** | 3D terrain from Copernicus EU-DEM / SRTM with cascaded shadows, roads cut into the hillside, layered spruce forests, broadleaf woods, stone pines, cypresses and palms, regional villages (chalets, Flemish brick, Mediterranean stucco, apartment blocks), crowds and camper vans on the climbs, guardrails, snow poles, KOM banners, French-style km markers, cobbled sectors, rippling lakes and sea. |
+| **World** | 3D terrain from Copernicus EU-DEM / SRTM draped with real Sentinel-2 satellite imagery, a physically based sky with clouds and haze, cascaded shadows, foliage built from hundreds of alpha-tested leaf and needle sprays per tree, roads cut into the hillside, layered spruce forests, broadleaf woods, stone pines, cypresses and palms, regional villages (chalets, Flemish brick, Mediterranean stucco, apartment blocks), crowds and camper vans on the climbs, guardrails, snow poles, KOM banners, French-style km markers, cobbled sectors, rippling lakes and sea. |
 | **Bikes** | 7 frames (aero, climbing, TT, endurance, gravel, steel, track) and 6 wheelsets, built from real frame geometry (stack, reach, tube angles) with aerofoil tubes, toothed chainrings and cassettes, a chain, derailleurs, disc brakes, laced spokes and clear-coat paint. Each changes weight, CdA, rim "sail" and rolling resistance. |
 | **Riders** | Anatomically lofted riders with kit panels, race numbers and vented helmets. Leg and arm IK with ankling; they switch between hoods, drops, descending tuck, out-of-the-saddle (the bike rocks) and TT extensions, and lean and steer through bends. |
 | **Modes** | Free Ride, Group Ride (pace partners), Race (AI field), Time Trial (no draft), Workout (ERG). |
@@ -122,7 +122,7 @@ Run the engine tests anywhere Swift runs: `swift test`.
 
 - **No online multiplayer.** Other riders are physics-simulated AI (pace partners and a race field matched to your FTP), not real people.
 - **No licensed brand bikes.** The frames and wheels are generic archetypes with realistic physics. Real brand models would need trademark licences.
-- Graphics are fully procedural (no art team or scanned assets): detailed, but stylised rather than photoreal.
+- Apart from the satellite imagery, everything is generated procedurally (no art team or scanned assets). It aims for realism but is not a AAA photogrammetry world: close-up ground relies on imagery at 4–13 m per pixel plus detail textures.
 - Some city circuits are approximate (see above). The mountain climbs match their race-book figures.
 
 ## Attribution
