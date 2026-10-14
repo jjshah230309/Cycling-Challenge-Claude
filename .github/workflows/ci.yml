@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  engine-linux:
+    name: Engine tests (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.1-noble
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build & test BreakawayCore
+        run: swift test
+
+  app-macos:
+    name: macOS app build
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app || true
+          swift --version
+      - name: Build (debug, all targets)
+        run: swift build
+      - name: Engine tests
+        run: swift test
+      - name: Package Breakaway.app
+        run: scripts/build-app.sh
+      - name: Zip app
+        run: ditto -c -k --keepParent build/Breakaway.app build/Breakaway-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Breakaway-macOS
+          path: build/Breakaway-macOS.zip
+      - name: Render world snapshots
+        timeout-minutes: 15
+        run: build/Breakaway.app/Contents/MacOS/Breakaway --snapshot build/snapshots alpe-dhuez,stelvio,galibier,arenberg,sanremo-finale,montreal-2026
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: world-snapshots
+          path: build/snapshots
